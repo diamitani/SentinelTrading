@@ -48,11 +48,11 @@ const PERSONA_PROFILES: Record<
     badge: 'Low-to-Moderate Income · Beginner Knowledge ($100 Start)',
     title: 'Start with $100. Understand why prices move before risking a single dollar.',
     subtitle:
-      'Designed for everyday personal traders who want plain-English guidance, automated 0.65% stop-loss protection, and a realistic path to compound $100 toward $1,000+ (10x annual growth).',
+      'Designed for everyday personal traders who want plain-English guidance, automated 0.65% stop-loss protection, and a simulator to explore how small, regular contributions could grow over time (hypothetical, not a projection).',
     howToUse:
       'Type any simple everyday observation into the 4-Step Wizard ("Pepsi is selling more canned drinks" or "AI chips are in huge demand"). Sentinel automatically finds the upstream commodity or stock ripple for you.',
     whatYouGet:
-      'Plain-English research briefs (01_INTENT_BRIEF.md), exact entry prices, a hard $0.65 max stop-loss per $100 trade, and a 12-month $100-to-10x compounding tracker.',
+      'Plain-English research briefs (01_INTENT_BRIEF.md), exact entry prices, a hard $0.65 max stop-loss per $100 trade, and a 12-month hypothetical growth simulator.',
     whyImportant:
       'Saves your financial life from blind social-media gambling and hype. You never enter a trade unless all 5 One Must Act safety criteria (W = 1.00) are verified.',
     whenItWorks:
@@ -66,7 +66,7 @@ const PERSONA_PROFILES: Record<
     ],
     wizardConfig: {
       hypothesisPrompt:
-        'Everyday consumer & commodity ripple: Pepsi canned beverage rollout driving aluminum demand (AA, BALL) + low-risk Polymarket/Kalshi event spreads for steady $100 to 10x compounding.',
+        'Everyday consumer & commodity ripple: Pepsi canned beverage rollout driving aluminum demand (AA, BALL) + Polymarket/Kalshi event-contract research for learning how markets price risk.',
       philosophy: 'Long-Term Enterprise Compound',
       goalTarget: '10x Annual Compound',
       targetReturnPct: 10.4,
@@ -204,7 +204,7 @@ const AIWORK_FEATURE_BENTO = [
   },
   {
     size: 'small',
-    title: '$100 to 10x Growth Engine',
+    title: 'Hypothetical Growth Simulator',
     desc: 'Start with $100 + $25/mo and compound across low-drawdown (0.65% max stop) statistical spreads.',
     img: 'https://framerusercontent.com/images/Jz9KleJLOcSD4s4U3Kjprs4Fx3s.png',
     actionView: AppView.GROWTH_10X,
@@ -947,7 +947,7 @@ export const MarketingHero: React.FC<MarketingHeroProps> = ({
                   },
                   {
                     label: 'Polymarket 64¢ vs Kalshi 71¢ Fed Rate Cut Spread',
-                    sub: '3-Day Profit · +7.0% Locked Arb',
+                    sub: '3-Day horizon · 7.0% apparent spread (not risk-free)',
                     cfg: {
                       ...PERSONA_PROFILES.ACTIVE_TRADER.wizardConfig,
                       hypothesisPrompt:
@@ -1031,7 +1031,7 @@ export const MarketingHero: React.FC<MarketingHeroProps> = ({
                 step: '03',
                 title: 'Execute & Track Compounding (Buy)',
                 time: 'Evening · 10 Minutes',
-                desc: 'Route top-ranked signals with an automated 0.65% max stop-loss, chat with the Quant Co-Pilot, and track your $100-to-10x or Plaid DMA portfolio.',
+                desc: 'Route top-ranked signals with an automated 0.65% max stop-loss, chat with the Quant Co-Pilot, and track a simulated or linked portfolio.',
               },
             ].map((st, i) => (
               <div
