@@ -1,7 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { fetchMarketAnalysis, submitPalThesis, fetchPlaidStatus, syncPlaidHoldings, linkPlaidInstitution } from './services/geminiService';
+import {
+  fetchMarketAnalysis,
+  submitPalThesis,
+  fetchPlaidStatus,
+  syncPlaidHoldings,
+  linkPlaidInstitution,
+  executeRostrHarness,
+} from './services/geminiService';
 import { getStoredUser, signOutUser, UserProfile } from './services/authService';
-import { MarketReport, AppView, PlaidStatus } from './types';
+import {
+  MarketReport,
+  AppView,
+  PlaidStatus,
+  HypothesisWizardConfig,
+} from './types';
 import { LoadingScreen } from './components/LoadingScreen';
 import { Dashboard } from './components/Dashboard';
 import { Arbitrage100Grid } from './components/Arbitrage100Grid';
@@ -15,19 +27,38 @@ import { ChatAssistant } from './components/ChatAssistant';
 import { NewsTicker } from './components/NewsTicker';
 import { MarketingHero } from './components/MarketingHero';
 import { AuthModal } from './components/AuthModal';
+import { HypothesisWizardModal } from './components/HypothesisWizardModal';
+import { AgentSandboxComposioView } from './components/AgentSandboxComposioView';
 
 const PRIMARY_NAV_ITEMS: { id: AppView; label: string }[] = [
-  { id: AppView.DASHBOARD, label: 'Overview' },
+  { id: AppView.DASHBOARD, label: 'Command Dashboard' },
+  { id: AppView.PAL_RUNTIME, label: 'ROSTR & POP 11' },
   { id: AppView.ARBITRAGE_100, label: '100 Trades' },
-  { id: AppView.OMNICHANNEL_HYPOTHESIS, label: 'Omnichannel' },
+  { id: AppView.AGENT_SANDBOX, label: 'Sandbox & Composio' },
   { id: AppView.GROWTH_10X, label: '10x Growth' },
-  { id: AppView.PAL_RUNTIME, label: 'PAL Thesis' },
 ];
 
 const SECONDARY_NAV_ITEMS: { id: AppView; label: string; description: string }[] = [
-  { id: AppView.PLAID_PORTFOLIO, label: 'Plaid Ledger', description: 'Prime brokerage balances & holdings' },
-  { id: AppView.ANALYSIS, label: 'Market Intel', description: 'Geopolitics, news wires & sentiment' },
-  { id: AppView.BACKEND_QA, label: 'Backend QA', description: 'Security, RLS & runtime verification' },
+  {
+    id: AppView.OMNICHANNEL_HYPOTHESIS,
+    label: 'Omnichannel Firehose',
+    description: '7 live streams & second-order commodity ripples',
+  },
+  {
+    id: AppView.PLAID_PORTFOLIO,
+    label: 'Plaid DMA Ledger',
+    description: 'Prime brokerage balances & holdings',
+  },
+  {
+    id: AppView.ANALYSIS,
+    label: 'Market Intel',
+    description: 'Geopolitics, news wires & sentiment',
+  },
+  {
+    id: AppView.BACKEND_QA,
+    label: 'Backend QA & RLS',
+    description: 'Security, Supabase RLS & runtime verification',
+  },
 ];
 
 const ALL_NAV_ITEMS: { id: AppView; label: string }[] = [
@@ -44,6 +75,9 @@ const App: React.FC = () => {
   const [plaidStatus, setPlaidStatus] = useState<PlaidStatus | null>(null);
   const [isSyncingPlaid, setIsSyncingPlaid] = useState<boolean>(false);
   const [executionBanner, setExecutionBanner] = useState<string | null>(null);
+
+  // Hypothesis, Trading Philosophy & Goals Wizard Modal state
+  const [isWizardOpen, setIsWizardOpen] = useState<boolean>(false);
 
   // Navigation responsiveness state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -98,13 +132,43 @@ const App: React.FC = () => {
         setLoading(false);
       } catch (err: any) {
         console.error(err);
-        setError('Failed to initialize Trading Core. Please check API configuration.');
+        setError('Failed to initialize ROSTR Trading Core. Please check server status.');
         setLoading(false);
       }
     };
 
     loadData();
   }, []);
+
+  const handleWizardSubmit = async (wizardConfig: HypothesisWizardConfig) => {
+    setIsCompilingThesis(true);
+    try {
+      const res = await executeRostrHarness(wizardConfig);
+      if (report) {
+        setReport({
+          ...report,
+          rostrRun: res.rostrRun,
+          palSession: res.palSession,
+          wizardConfig: res.wizardConfig,
+          recommendations: res.recommendations,
+          secondOrderChains: res.secondOrderChains,
+          omnichannelNodes: res.omnichannelNodes,
+          lastUpdated: new Date().toLocaleTimeString(),
+        });
+      }
+      setExecutionBanner(
+        `ROSTR Harness Compiled (W = 1.00 · 11ms DAG): ${wizardConfig.philosophy} · ${wizardConfig.holdingHorizon} · ${wizardConfig.goalTarget} (+${wizardConfig.targetReturnPct}%). All 11 POP artifacts & 100 signals updated.`
+      );
+      setTimeout(() => setExecutionBanner(null), 6500);
+    } catch (e: any) {
+      setExecutionBanner(
+        'Wizard update notice: ' + (e?.message || 'Unable to execute ROSTR harness.')
+      );
+      setTimeout(() => setExecutionBanner(null), 5000);
+    } finally {
+      setIsCompilingThesis(false);
+    }
+  };
 
   const handleThesisSubmit = async (
     prompt: string,
@@ -120,12 +184,15 @@ const App: React.FC = () => {
         ...updatedReport,
         palSession,
       });
-      setExecutionBanner(`Thesis successfully compiled across 10 PAL stages! Synthesized 100 fresh arbitrage opportunities.`);
+      setExecutionBanner(
+        `Thesis compiled across ROSTR & PAL stages! Synthesized 11 POP artifacts & 100 fresh arbitrage signals.`
+      );
       setTimeout(() => setExecutionBanner(null), 5000);
-      setView(AppView.ARBITRAGE_100);
     } catch (e: any) {
       console.error(e);
-      setExecutionBanner('Thesis intake notice: ' + (e?.message || 'Unable to re-compile thesis.'));
+      setExecutionBanner(
+        'Thesis intake notice: ' + (e?.message || 'Unable to re-compile thesis.')
+      );
       setTimeout(() => setExecutionBanner(null), 5000);
     } finally {
       setIsCompilingThesis(false);
@@ -137,7 +204,9 @@ const App: React.FC = () => {
     try {
       const updated = await syncPlaidHoldings();
       setPlaidStatus(updated);
-      setExecutionBanner('Plaid institutional ledger and margin buying power synchronized in real time.');
+      setExecutionBanner(
+        'Plaid institutional ledger and DMA margin buying power synchronized in real time.'
+      );
       setTimeout(() => setExecutionBanner(null), 4000);
     } catch (e: any) {
       console.error(e);
@@ -151,9 +220,13 @@ const App: React.FC = () => {
     setPlaidStatus(updated);
   };
 
-  const handleExecuteTrade = (trade: any, scale: number) => {
+  const handleExecuteTrade = (trade: any, scale: number = 1.8) => {
     setExecutionBanner(
-      `ORDER ROUTED: ${trade.action} ${trade.ticker} [${scale}x Scale] across ${trade.primaryVenue} ⇄ ${trade.hedgeVenue}. Projected Spread: +${trade.arbitrageSpreadPct}%.`
+      `ORDER ROUTED [W=1.00]: ${trade.action} ${trade.ticker} [${scale}x Scale · ${
+        trade.goalHorizonTag || '3-Day Profit'
+      }] across ${trade.primaryVenue} ⇄ ${trade.hedgeVenue}. Target: +${
+        trade.targetReturnPct || trade.arbitrageSpreadPct
+      }%.`
     );
     setTimeout(() => setExecutionBanner(null), 6000);
   };
@@ -197,7 +270,7 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-blue-100 selection:text-blue-900 flex flex-col">
       {/* Responsive Top Navigation Bar */}
       <header className="border-b border-slate-200 bg-white/95 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4 lg:gap-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3 lg:gap-6">
           {/* Zone 1: Brand Lockup */}
           <button
             type="button"
@@ -207,13 +280,18 @@ const App: React.FC = () => {
             <span className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-mono font-bold text-base shrink-0">
               α
             </span>
-            <span className="text-lg font-bold tracking-tight text-slate-900">
-              Alpha<span className="text-blue-600">Sentience</span>
-            </span>
+            <div>
+              <span className="text-base sm:text-lg font-bold tracking-tight text-slate-900 block leading-none">
+                Alpha<span className="text-blue-600">Sentience</span>
+              </span>
+              <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
+                ROSTR Agent OS
+              </span>
+            </div>
           </button>
 
-          {/* Zone 2: Desktop Navigation (Clean Single-Line Links + Workspace Dropdown) */}
-          <nav aria-label="Primary Navigation" className="hidden lg:flex items-center gap-6">
+          {/* Zone 2: Desktop Navigation */}
+          <nav aria-label="Primary Navigation" className="hidden lg:flex items-center gap-5">
             {PRIMARY_NAV_ITEMS.map((item) => {
               const active = view === item.id;
               return (
@@ -221,7 +299,7 @@ const App: React.FC = () => {
                   key={item.id}
                   type="button"
                   onClick={() => navigateTo(item.id)}
-                  className={`py-2 text-sm font-medium whitespace-nowrap shrink-0 border-b-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
+                  className={`py-2 text-xs xl:text-sm font-medium whitespace-nowrap shrink-0 border-b-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
                     active
                       ? 'border-blue-600 text-slate-900 font-semibold'
                       : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
@@ -239,7 +317,7 @@ const App: React.FC = () => {
                 onClick={() => setMoreMenuOpen((prev) => !prev)}
                 aria-expanded={moreMenuOpen}
                 aria-haspopup="menu"
-                className={`py-2 text-sm font-medium whitespace-nowrap shrink-0 border-b-2 transition-colors flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
+                className={`py-2 text-xs xl:text-sm font-medium whitespace-nowrap shrink-0 border-b-2 transition-colors flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
                   isSecondaryActive
                     ? 'border-blue-600 text-slate-900 font-semibold'
                     : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
@@ -247,12 +325,19 @@ const App: React.FC = () => {
               >
                 <span>Ledger &amp; QA</span>
                 <svg
-                  className={`w-3.5 h-3.5 transition-transform duration-150 ${moreMenuOpen ? 'rotate-180' : ''}`}
+                  className={`w-3.5 h-3.5 transition-transform duration-150 ${
+                    moreMenuOpen ? 'rotate-180' : ''
+                  }`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
                 </svg>
               </button>
 
@@ -283,18 +368,30 @@ const App: React.FC = () => {
             </div>
           </nav>
 
-          {/* Zone 3: Account Action & Mobile Menu Toggle */}
-          <div className="flex items-center gap-2.5 shrink-0">
+          {/* Zone 3: Hypothesis Wizard Button, Account Action & Mobile Menu Toggle */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsWizardOpen(true)}
+              className="hidden sm:inline-flex items-center px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors whitespace-nowrap shadow-xs"
+            >
+              ✦ Hypothesis Wizard
+            </button>
+
             {currentUser ? (
-              <div className="hidden sm:flex items-center gap-2.5">
-                <div className="text-right max-w-[140px]">
-                  <div className="text-xs font-semibold text-slate-900 truncate">{currentUser.fullName}</div>
-                  <div className="text-[11px] text-slate-500 truncate">{currentUser.tier}</div>
+              <div className="hidden sm:flex items-center gap-2">
+                <div className="text-right max-w-[130px]">
+                  <div className="text-xs font-semibold text-slate-900 truncate">
+                    {currentUser.fullName}
+                  </div>
+                  <div className="text-[10px] text-emerald-700 font-mono truncate">
+                    ● {currentUser.tier}
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={handleSignOut}
-                  className="px-3 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0"
+                  className="px-2.5 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0"
                 >
                   Sign Out
                 </button>
@@ -303,7 +400,7 @@ const App: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsAuthModalOpen(true)}
-                className="py-2 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
+                className="py-2 px-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
               >
                 Sign In
               </button>
@@ -319,11 +416,21 @@ const App: React.FC = () => {
             >
               {mobileMenuOpen ? (
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               ) : (
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
                 </svg>
               )}
             </button>
@@ -334,6 +441,17 @@ const App: React.FC = () => {
         {mobileMenuOpen && (
           <div className="lg:hidden border-t border-slate-200 bg-white px-4 py-4 max-h-[calc(100vh-4rem)] overflow-y-auto shadow-lg">
             <div className="max-w-7xl mx-auto space-y-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setIsWizardOpen(true);
+                }}
+                className="w-full py-2.5 px-4 rounded-lg bg-blue-600 text-white text-xs font-bold text-center"
+              >
+                ✦ Open Hypothesis, Philosophy &amp; Goals Wizard
+              </button>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                 {ALL_NAV_ITEMS.map((item) => {
                   const active = view === item.id;
@@ -360,7 +478,9 @@ const App: React.FC = () => {
                 {currentUser ? (
                   <>
                     <div className="min-w-0">
-                      <div className="text-xs font-semibold text-slate-900 truncate">{currentUser.fullName}</div>
+                      <div className="text-xs font-semibold text-slate-900 truncate">
+                        {currentUser.fullName}
+                      </div>
                       <div className="text-[11px] text-slate-500 truncate">{currentUser.email}</div>
                     </div>
                     <button
@@ -405,7 +525,7 @@ const App: React.FC = () => {
       {/* Hero Section (Visible on Dashboard to anchor marketing value proposition) */}
       {view === AppView.DASHBOARD && (
         <MarketingHero
-          onLaunchTerminal={() => navigateTo(AppView.ARBITRAGE_100)}
+          onLaunchTerminal={() => setIsWizardOpen(true)}
           onOpenAuth={() => setIsAuthModalOpen(true)}
           isAuthenticated={Boolean(currentUser)}
           userEmail={currentUser?.email}
@@ -417,15 +537,27 @@ const App: React.FC = () => {
         {view === AppView.DASHBOARD && (
           <Dashboard
             report={report}
+            plaidStatus={plaidStatus}
+            onSyncPlaid={handleSyncPlaid}
+            onOpenWizard={() => setIsWizardOpen(true)}
             onNavigateTo100Trades={() => navigateTo(AppView.ARBITRAGE_100)}
             onNavigateToPal={() => navigateTo(AppView.PAL_RUNTIME)}
             onNavigateToPlaid={() => navigateTo(AppView.PLAID_PORTFOLIO)}
+            onNavigateToSandbox={() => navigateTo(AppView.AGENT_SANDBOX)}
+            onExecuteTrade={(t) => handleExecuteTrade(t, t.positionScaleMultiple || 2.0)}
           />
         )}
         {view === AppView.ARBITRAGE_100 && (
           <Arbitrage100Grid
             recommendations={report.recommendations}
             onExecuteTrade={handleExecuteTrade}
+            onOpenWizard={() => setIsWizardOpen(true)}
+          />
+        )}
+        {view === AppView.AGENT_SANDBOX && (
+          <AgentSandboxComposioView
+            report={report}
+            onOpenWizard={() => setIsWizardOpen(true)}
           />
         )}
         {view === AppView.OMNICHANNEL_HYPOTHESIS && (
@@ -439,17 +571,15 @@ const App: React.FC = () => {
           />
         )}
         {view === AppView.GROWTH_10X && (
-          <GrowthSimulatorView
-            onDeployToArbitrage={() => setView(AppView.ARBITRAGE_100)}
-          />
+          <GrowthSimulatorView onDeployToArbitrage={() => setView(AppView.ARBITRAGE_100)} />
         )}
-        {view === AppView.BACKEND_QA && (
-          <BackendQaView />
-        )}
+        {view === AppView.BACKEND_QA && <BackendQaView />}
         {view === AppView.PAL_RUNTIME && (
           <PalRuntimeView
             palSession={report.palSession}
+            rostrRun={report.rostrRun}
             onSubmitThesis={handleThesisSubmit}
+            onOpenWizard={() => setIsWizardOpen(true)}
             isCompiling={isCompilingThesis}
           />
         )}
@@ -474,8 +604,16 @@ const App: React.FC = () => {
         {view === AppView.ANALYSIS && <AnalysisView report={report} />}
       </main>
 
-      {/* Tactical Bloomberg-Style Chat Assistant */}
+      {/* Floating Tactical Bloomberg-Style Chat Assistant */}
       <ChatAssistant report={report} />
+
+      {/* 4-Step Hypothesis, Trading Philosophy & Goals Wizard Modal */}
+      <HypothesisWizardModal
+        isOpen={isWizardOpen}
+        initialConfig={report.wizardConfig}
+        onClose={() => setIsWizardOpen(false)}
+        onSubmit={handleWizardSubmit}
+      />
 
       {/* Auth Modal Drawer */}
       <AuthModal
@@ -483,7 +621,9 @@ const App: React.FC = () => {
         onClose={() => setIsAuthModalOpen(false)}
         onAuthSuccess={(user) => {
           setCurrentUser(user);
-          setExecutionBanner(`Authenticated as ${user.fullName} (${user.tier}). Session locked.`);
+          setExecutionBanner(
+            `Authenticated as ${user.fullName} (${user.tier}). Session persisted to Supabase & local store.`
+          );
           setTimeout(() => setExecutionBanner(null), 5000);
         }}
       />
@@ -492,24 +632,44 @@ const App: React.FC = () => {
       <footer className="border-t border-slate-200 bg-slate-50 text-xs text-slate-500 font-sans py-6 px-4 sm:px-6 mt-auto">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="font-semibold text-slate-800">AlphaSentience</span>
+            <span className="font-semibold text-slate-800">
+              AlphaSentience · ROSTR Autonomous Agent OS
+            </span>
             <span aria-hidden="true">·</span>
-            <span>100 Daily Arbitrage Signals</span>
+            <span>One Must Act Wholeness (W = 1.00)</span>
             <span aria-hidden="true">·</span>
-            <span>Plaid Prime Brokerage Ledger</span>
+            <span>Middle-Out DAG (11ms)</span>
+            <span aria-hidden="true">·</span>
+            <span>POP 11-Artifact Engine</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-500">
-            <button type="button" onClick={() => navigateTo(AppView.DASHBOARD)} className="hover:text-slate-900 transition-colors">
-              Overview
+            <button
+              type="button"
+              onClick={() => navigateTo(AppView.DASHBOARD)}
+              className="hover:text-slate-900 transition-colors"
+            >
+              Command Dashboard
             </button>
-            <button type="button" onClick={() => navigateTo(AppView.ARBITRAGE_100)} className="hover:text-slate-900 transition-colors">
-              100 Trades
+            <button
+              type="button"
+              onClick={() => navigateTo(AppView.PAL_RUNTIME)}
+              className="hover:text-slate-900 transition-colors"
+            >
+              ROSTR &amp; POP 11
             </button>
-            <button type="button" onClick={() => navigateTo(AppView.GROWTH_10X)} className="hover:text-slate-900 transition-colors">
-              10x Growth
+            <button
+              type="button"
+              onClick={() => navigateTo(AppView.AGENT_SANDBOX)}
+              className="hover:text-slate-900 transition-colors"
+            >
+              Sandbox &amp; Composio
             </button>
-            <button type="button" onClick={() => navigateTo(AppView.BACKEND_QA)} className="hover:text-slate-900 transition-colors">
+            <button
+              type="button"
+              onClick={() => navigateTo(AppView.BACKEND_QA)}
+              className="hover:text-slate-900 transition-colors"
+            >
               Security &amp; QA
             </button>
           </div>

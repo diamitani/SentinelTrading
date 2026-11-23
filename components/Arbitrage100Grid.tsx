@@ -4,10 +4,16 @@ import { TradeRecommendation } from '../types';
 interface Arbitrage100GridProps {
   recommendations: TradeRecommendation[];
   onExecuteTrade?: (trade: TradeRecommendation, scaleMultiple: number) => void;
+  onOpenWizard?: () => void;
 }
 
-export const Arbitrage100Grid: React.FC<Arbitrage100GridProps> = ({ recommendations, onExecuteTrade }) => {
+export const Arbitrage100Grid: React.FC<Arbitrage100GridProps> = ({
+  recommendations,
+  onExecuteTrade,
+  onOpenWizard,
+}) => {
   const [filterType, setFilterType] = useState<string>('ALL');
+  const [filterHorizon, setFilterHorizon] = useState<string>('ALL');
   const [filterUrgency, setFilterUrgency] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [sortField, setSortField] = useState<'spread' | 'confidence' | 'alpha' | 'scale'>('spread');
@@ -17,12 +23,18 @@ export const Arbitrage100Grid: React.FC<Arbitrage100GridProps> = ({ recommendati
   const filteredTrades = useMemo(() => {
     return recommendations
       .filter((t) => {
-        if (filterType !== 'ALL' && t.arbitrageType !== filterType) return false;
+        if (filterType !== 'ALL' && t.arbitrageType !== filterType && t.marketCategory !== filterType) {
+          return false;
+        }
+        if (filterHorizon !== 'ALL' && t.goalHorizonTag !== filterHorizon) {
+          return false;
+        }
         if (filterUrgency !== 'ALL' && t.oneMustActUrgency !== filterUrgency) return false;
         if (searchTerm) {
-          const matchTicker = t.ticker.toLowerCase().includes(searchTerm.toLowerCase());
-          const matchName = t.name.toLowerCase().includes(searchTerm.toLowerCase());
-          const matchReason = t.reasoning.toLowerCase().includes(searchTerm.toLowerCase());
+          const q = searchTerm.toLowerCase();
+          const matchTicker = t.ticker.toLowerCase().includes(q);
+          const matchName = t.name.toLowerCase().includes(q);
+          const matchReason = t.reasoning.toLowerCase().includes(q);
           if (!matchTicker && !matchName && !matchReason) return false;
         }
         return true;
@@ -31,10 +43,11 @@ export const Arbitrage100Grid: React.FC<Arbitrage100GridProps> = ({ recommendati
         if (sortField === 'spread') return (b.arbitrageSpreadPct || 0) - (a.arbitrageSpreadPct || 0);
         if (sortField === 'confidence') return b.confidence - a.confidence;
         if (sortField === 'alpha') return (b.expectedAlphaBps || 0) - (a.expectedAlphaBps || 0);
-        if (sortField === 'scale') return (b.positionScaleMultiple || 1) - (a.positionScaleMultiple || 1);
+        if (sortField === 'scale')
+          return (b.positionScaleMultiple || 1) - (a.positionScaleMultiple || 1);
         return 0;
       });
-  }, [recommendations, filterType, filterUrgency, searchTerm, sortField]);
+  }, [recommendations, filterType, filterHorizon, filterUrgency, searchTerm, sortField]);
 
   const handleScaleIncrease = (ticker: string, defaultScale: number = 1.0) => {
     setScaledMultipliers((prev) => {
@@ -52,8 +65,12 @@ export const Arbitrage100Grid: React.FC<Arbitrage100GridProps> = ({ recommendati
     }
   };
 
-  const criticalCount = recommendations.filter((t) => t.oneMustActUrgency === 'CRITICAL_IMMEDIATE').length;
-  const maxSpread = Math.max(...recommendations.map((t) => t.arbitrageSpreadPct || 0), 0).toFixed(2);
+  const criticalCount = recommendations.filter(
+    (t) => t.oneMustActUrgency === 'CRITICAL_IMMEDIATE'
+  ).length;
+  const maxSpread = Math.max(...recommendations.map((t) => t.arbitrageSpreadPct || 0), 0).toFixed(
+    2
+  );
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
@@ -62,29 +79,75 @@ export const Arbitrage100Grid: React.FC<Arbitrage100GridProps> = ({ recommendati
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-              <span>Quant Arbitrage Matrix</span>
-              <span className="text-blue-600 font-mono text-xs sm:text-sm">100 Daily Opportunities</span>
+              <span>ROSTR 100-Trade Arbitrage &amp; Prediction Matrix</span>
+              <span className="text-blue-600 font-mono text-xs sm:text-sm">
+                One Must Act W = 1.00
+              </span>
             </h2>
           </div>
           <p className="text-xs text-slate-600 mt-1 max-w-2xl font-normal">
-            Cross-venue pricing discrepancies across lit exchanges and ATS dark pools. Verified with <span className="font-semibold text-slate-900">One-Must-Act</span> instant position increase scale multipliers up to 4.5x.
+            Cross-venue pricing discrepancies across CME Commodity Futures, Polymarket vs. Kalshi Event Contracts, Dual-Listed ADRs, and Dark Pool ATS books.
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 sm:gap-3 w-full lg:w-auto shrink-0">
-          <div className="bg-white border border-slate-200 px-2.5 sm:px-4 py-2.5 rounded-lg text-center shadow-xs">
-            <div className="text-[10px] text-slate-500 uppercase font-mono truncate">Signals Active</div>
-            <div className="text-lg sm:text-xl font-mono font-bold text-slate-900 tabular-nums">{recommendations.length}</div>
-          </div>
-          <div className="bg-white border border-red-200 px-2.5 sm:px-4 py-2.5 rounded-lg text-center shadow-xs">
-            <div className="text-[10px] text-red-600 uppercase font-mono truncate">Critical</div>
-            <div className="text-lg sm:text-xl font-mono font-bold text-red-600 tabular-nums">{criticalCount}</div>
-          </div>
-          <div className="bg-white border border-emerald-200 px-2.5 sm:px-4 py-2.5 rounded-lg text-center shadow-xs">
-            <div className="text-[10px] text-emerald-700 uppercase font-mono truncate">Max Spread</div>
-            <div className="text-lg sm:text-xl font-mono font-bold text-emerald-600 tabular-nums">+{maxSpread}%</div>
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto shrink-0">
+          {onOpenWizard && (
+            <button
+              type="button"
+              onClick={onOpenWizard}
+              className="px-3.5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs"
+            >
+              Change Hypothesis / Horizon Goal
+            </button>
+          )}
+          <div className="grid grid-cols-3 gap-2 flex-1 lg:flex-initial">
+            <div className="bg-white border border-slate-200 px-3 py-2 rounded-lg text-center shadow-xs">
+              <div className="text-[10px] text-slate-500 uppercase font-mono truncate">Signals</div>
+              <div className="text-base sm:text-lg font-mono font-bold text-slate-900 tabular-nums">
+                {filteredTrades.length}/{recommendations.length}
+              </div>
+            </div>
+            <div className="bg-white border border-red-200 px-3 py-2 rounded-lg text-center shadow-xs">
+              <div className="text-[10px] text-red-600 uppercase font-mono truncate">Critical</div>
+              <div className="text-base sm:text-lg font-mono font-bold text-red-600 tabular-nums">
+                {criticalCount}
+              </div>
+            </div>
+            <div className="bg-white border border-emerald-200 px-3 py-2 rounded-lg text-center shadow-xs">
+              <div className="text-[10px] text-emerald-700 uppercase font-mono truncate">
+                Max Spread
+              </div>
+              <div className="text-base sm:text-lg font-mono font-bold text-emerald-600 tabular-nums">
+                +{maxSpread}%
+              </div>
+            </div>
           </div>
         </div>
+      </div>
+
+      {/* Quick Horizon Filter Pills */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {[
+          { id: 'ALL', label: 'All Horizons (100)' },
+          { id: '3-Day Profit', label: '⚡ 3-Day Profit (+10%)' },
+          { id: 'Weekly', label: '📅 Weekly Cycle' },
+          { id: 'Monthly', label: '🗓️ Monthly Swing' },
+          { id: 'Quarterly', label: '📈 Quarterly Macro' },
+          { id: 'Hold 1 Year', label: '🏛️ Hold 1 Year (10x)' },
+        ].map((h) => (
+          <button
+            key={h.id}
+            type="button"
+            onClick={() => setFilterHorizon(h.id)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              filterHorizon === h.id
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            {h.label}
+          </button>
+        ))}
       </div>
 
       {/* Filters & Control Bar */}
@@ -93,7 +156,7 @@ export const Arbitrage100Grid: React.FC<Arbitrage100GridProps> = ({ recommendati
           <div className="relative w-full sm:w-64">
             <input
               type="text"
-              placeholder="Search 100 tickers or pairs..."
+              placeholder="Search AA, ALI=F, POLY, NVDA..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="bg-white border border-slate-200 text-xs text-slate-900 rounded-lg px-3 py-2 pl-8 w-full focus:outline-none focus:ring-2 focus:ring-blue-600"
@@ -104,25 +167,30 @@ export const Arbitrage100Grid: React.FC<Arbitrage100GridProps> = ({ recommendati
               stroke="currentColor"
               viewBox="0 0 24 24"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
             </svg>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500 font-mono shrink-0">CATEGORY:</span>
+            <span className="text-xs text-slate-500 font-mono shrink-0">MARKET / TYPE:</span>
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
               className="bg-white border border-slate-200 text-xs text-slate-800 rounded-lg px-2.5 py-2 flex-1 sm:flex-initial focus:outline-none focus:ring-2 focus:ring-blue-600"
             >
-              <option value="ALL">All Categories ({recommendations.length})</option>
+              <option value="ALL">All Categories</option>
+              <option value="Prediction Markets">Prediction &amp; Betting Markets</option>
+              <option value="Commodities">Second-Order Commodities</option>
               <option value="Cross-Exchange">Cross-Exchange</option>
               <option value="Statistical">Statistical</option>
               <option value="Dual-Listing">Dual-Listing</option>
               <option value="Options Box/Conversion">Options Box</option>
               <option value="Cash-and-Carry">Cash-and-Carry</option>
-              <option value="Triangular">Triangular</option>
-              <option value="Index Basis">Index Basis</option>
             </select>
           </div>
 
@@ -164,7 +232,8 @@ export const Arbitrage100Grid: React.FC<Arbitrage100GridProps> = ({ recommendati
         {filteredTrades.map((trade, idx) => {
           const isCritical = trade.oneMustActUrgency === 'CRITICAL_IMMEDIATE';
           const isHigh = trade.oneMustActUrgency === 'HIGH_MOMENTUM';
-          const currentScale = scaledMultipliers[trade.ticker] || trade.positionScaleMultiple || 1.0;
+          const currentScale =
+            scaledMultipliers[trade.ticker] || trade.positionScaleMultiple || 1.0;
           const isExecuted = executedTrades[trade.ticker];
 
           return (
@@ -180,8 +249,10 @@ export const Arbitrage100Grid: React.FC<Arbitrage100GridProps> = ({ recommendati
                 {/* Header row */}
                 <div className="flex justify-between items-start gap-2 mb-2">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-xl font-bold font-mono text-slate-900 tracking-tight">{trade.ticker}</h3>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <h3 className="text-lg font-bold font-mono text-slate-900 tracking-tight">
+                        {trade.ticker}
+                      </h3>
                       <span
                         className={`text-[10px] font-bold px-2 py-0.5 rounded font-mono uppercase shrink-0 ${
                           trade.action === 'BUY' || trade.action === 'CALL'
@@ -191,39 +262,52 @@ export const Arbitrage100Grid: React.FC<Arbitrage100GridProps> = ({ recommendati
                       >
                         {trade.action}
                       </span>
+                      {trade.goalHorizonTag && (
+                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-900 text-white">
+                          {trade.goalHorizonTag}
+                        </span>
+                      )}
                     </div>
-                    <div className="text-xs text-slate-500 truncate mt-0.5">
-                      {trade.name}
-                    </div>
+                    <div className="text-xs text-slate-500 truncate mt-0.5">{trade.name}</div>
                   </div>
 
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     <div className="text-sm font-mono font-bold text-slate-900">
                       ${trade.entryPrice?.toFixed(2) ?? 'MKT'}
                     </div>
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded font-mono font-semibold ${
-                        isCritical
-                          ? 'bg-red-100 text-red-700'
-                          : isHigh
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
-                      {trade.oneMustActUrgency === 'CRITICAL_IMMEDIATE'
-                        ? 'MUST ACT NOW'
-                        : trade.oneMustActUrgency === 'HIGH_MOMENTUM'
-                        ? 'HIGH MOMENTUM'
-                        : 'OPPORTUNITY'}
-                    </span>
+                    {trade.targetReturnPct ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-emerald-100 text-emerald-800">
+                        +{trade.targetReturnPct}% Goal
+                      </span>
+                    ) : (
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded font-mono font-semibold ${
+                          isCritical
+                            ? 'bg-red-100 text-red-700'
+                            : isHigh
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {isCritical ? 'MUST ACT' : 'ACTIVE'}
+                      </span>
+                    )}
                   </div>
                 </div>
+
+                {trade.predictionOddsSpread && (
+                  <div className="my-2 px-2.5 py-1.5 rounded bg-amber-50 border border-amber-200 text-[11px] font-mono text-amber-950 font-semibold">
+                    🎲 {trade.predictionOddsSpread}
+                  </div>
+                )}
 
                 {/* Arbitrage Venues & Spread Card */}
                 <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 my-2.5">
                   <div className="flex justify-between items-center text-xs font-mono">
                     <span className="text-slate-600">{trade.arbitrageType}</span>
-                    <span className="text-emerald-700 font-bold">Spread: +{trade.arbitrageSpreadPct}%</span>
+                    <span className="text-emerald-700 font-bold">
+                      Spread: +{trade.arbitrageSpreadPct}%
+                    </span>
                   </div>
                   <div className="text-[11px] text-slate-500 mt-1 flex items-center justify-between font-mono">
                     <span className="truncate max-w-[95px]">{trade.primaryVenue}</span>
@@ -240,7 +324,9 @@ export const Arbitrage100Grid: React.FC<Arbitrage100GridProps> = ({ recommendati
                   </div>
                   <div className="bg-slate-50 p-1.5 rounded border border-slate-100">
                     <div className="text-slate-400 text-[9px]">ALPHA BPS</div>
-                    <div className="text-emerald-700 font-bold">+{trade.expectedAlphaBps || 120}</div>
+                    <div className="text-emerald-700 font-bold">
+                      +{trade.expectedAlphaBps || 120}
+                    </div>
                   </div>
                   <div className="bg-slate-50 p-1.5 rounded border border-slate-100">
                     <div className="text-slate-400 text-[9px]">R/R RATIO</div>
