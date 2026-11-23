@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { HeroDashboardPreview } from './HeroDashboardPreview';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HypothesisWizardConfig, AppView } from '../types';
 import {
@@ -369,7 +370,7 @@ export const MarketingHero: React.FC<MarketingHeroProps> = ({
               onClick={() => setIsCollapsed(false)}
               className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-full bg-white border border-[#3d3d3d]/15 text-xs font-semibold text-[#3d3d3d] hover:bg-slate-50"
             >
-              <span>Expand AIwork Experience</span>
+              <span>Expand Sentinel Guide</span>
               <ChevronDown className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -395,7 +396,7 @@ export const MarketingHero: React.FC<MarketingHeroProps> = ({
         {/* Authentic AIwork Framer Hero Sky/Cloud Backdrop Image */}
         <img
           src="https://framerusercontent.com/images/PfvVP7K0HXiZI3ttOOLXTJmPn8.png"
-          alt="Sentinel AIwork Hero Backdrop"
+          alt=""
           referrerPolicy="no-referrer"
           className="absolute inset-x-0 top-0 w-full h-[74%] object-cover opacity-45 pointer-events-none"
         />
@@ -518,20 +519,15 @@ export const MarketingHero: React.FC<MarketingHeroProps> = ({
             data-framer-name="Dashboard Wrapper"
             className="relative w-full max-w-[1060px] mt-12 sm:mt-16"
           >
-            {/* Main Center AIwork Dashboard Frame (Image 1) */}
+            {/* Sentinel dashboard preview */}
             <div className="relative rounded-[24px] p-2 sm:p-3 bg-white/70 backdrop-blur-md border border-[#3d3d3d]/15 shadow-2xl overflow-hidden">
-              <img
-                src="https://framerusercontent.com/images/vFLahD4B0lzbZNL7j32nBF9k5E.png"
-                alt="Sentinel AIwork Main Dashboard Frame"
-                referrerPolicy="no-referrer"
-                className="w-full h-auto rounded-[18px] border border-[#3d3d3d]/10"
-              />
+              <HeroDashboardPreview />
 
               {/* Live Sentinel Interactive Overlay Bar on bottom of Hero Frame */}
               <div className="mt-2.5 p-3.5 sm:p-4 rounded-[16px] bg-white border border-[#3d3d3d]/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2 text-xs">
                   <span className="px-2.5 py-1 rounded-md bg-[#2f69ff]/10 text-[#2f69ff] font-mono font-bold">
-                    LIVE ROSTR ENGINE · W = 1.00
+                    SAMPLE RUN · ROSTR ENGINE · W = 1.00
                   </span>
                   <span className="font-semibold text-black">
                     Pepsi Can Rollout → CME Aluminum (ALI=F) &amp; Alcoa (AA) Calls (+10.8% 3-Day
@@ -551,27 +547,6 @@ export const MarketingHero: React.FC<MarketingHeroProps> = ({
               </div>
             </div>
 
-            {/* AIwork Floating Left Card (Image 2) */}
-            <motion.img
-              initial={{ opacity: 0, x: -25 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.7, delay: 0.25 }}
-              src="https://framerusercontent.com/images/o7TmuCdvQkuuYL3Xp40IRR13qw.png"
-              alt="Sentinel AIwork Floating Analytics Card"
-              referrerPolicy="no-referrer"
-              className="hidden lg:block absolute -left-8 -bottom-6 w-60 rounded-2xl shadow-xl border border-[#3d3d3d]/10 bg-white"
-            />
-
-            {/* AIwork Floating Right Card (Image 3) */}
-            <motion.img
-              initial={{ opacity: 0, x: 25 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.7, delay: 0.3 }}
-              src="https://framerusercontent.com/images/u5JZCfu8c9Frrz6KQEsRG7vqM.png"
-              alt="Sentinel AIwork Workflow Speed Card"
-              referrerPolicy="no-referrer"
-              className="hidden lg:block absolute -right-8 -top-8 w-56 rounded-2xl shadow-xl border border-[#3d3d3d]/10 bg-white"
-            />
           </motion.div>
 
           {/* =================================================================
@@ -1214,7 +1189,7 @@ export const MarketingHero: React.FC<MarketingHeroProps> = ({
         <div className="max-w-[1240px] mx-auto relative rounded-[24px] bg-[#0f172a] text-white p-8 sm:p-14 overflow-hidden flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8">
           <img
             src="https://framerusercontent.com/images/44hCWtn3BKzjAtKugGAid295p8.png"
-            alt="AIwork Wave Shape"
+            alt=""
             referrerPolicy="no-referrer"
             className="absolute inset-0 w-full h-full object-cover opacity-25 pointer-events-none"
           />
