@@ -83,6 +83,7 @@ const App: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
+  const dashboardAnchorRef = useRef<HTMLElement>(null);
 
   // Auth state
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -271,23 +272,18 @@ const App: React.FC = () => {
       {/* Responsive Top Navigation Bar */}
       <header className="border-b border-slate-200 bg-white/95 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3 lg:gap-6">
-          {/* Zone 1: Brand Lockup */}
+          {/* Zone 1: Clean 1-Line Brand Lockup */}
           <button
             type="button"
             onClick={() => navigateTo(AppView.DASHBOARD)}
             className="flex items-center gap-2.5 whitespace-nowrap shrink-0 text-left rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
           >
-            <span className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-mono font-bold text-base shrink-0">
-              α
+            <span className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white font-mono font-bold text-sm shrink-0">
+              S
             </span>
-            <div>
-              <span className="text-base sm:text-lg font-bold tracking-tight text-slate-900 block leading-none">
-                Alpha<span className="text-blue-600">Sentience</span>
-              </span>
-              <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
-                ROSTR Agent OS
-              </span>
-            </div>
+            <span className="text-lg font-extrabold tracking-tight text-slate-900">
+              Sentinel<span className="text-blue-600 font-semibold"> · Trading</span>
+            </span>
           </button>
 
           {/* Zone 2: Desktop Navigation */}
@@ -522,18 +518,26 @@ const App: React.FC = () => {
       {/* Running Headline Ticker */}
       <NewsTicker news={report.newsFeed} />
 
-      {/* Hero Section (Visible on Dashboard to anchor marketing value proposition) */}
+      {/* AIwork Framer Template Sentinel Landing Experience (Above Live Command Dashboard) */}
       {view === AppView.DASHBOARD && (
         <MarketingHero
           onLaunchTerminal={() => setIsWizardOpen(true)}
           onOpenAuth={() => setIsAuthModalOpen(true)}
           isAuthenticated={Boolean(currentUser)}
           userEmail={currentUser?.email}
+          onApplyPresetConfig={handleWizardSubmit}
+          onNavigateToView={navigateTo}
+          onJumpToDashboard={() =>
+            dashboardAnchorRef.current?.scrollIntoView({ behavior: 'smooth' })
+          }
         />
       )}
 
       {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-grow w-full relative">
+      <main
+        ref={dashboardAnchorRef}
+        className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-grow w-full relative"
+      >
         {view === AppView.DASHBOARD && (
           <Dashboard
             report={report}
@@ -632,15 +636,13 @@ const App: React.FC = () => {
       <footer className="border-t border-slate-200 bg-slate-50 text-xs text-slate-500 font-sans py-6 px-4 sm:px-6 mt-auto">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="font-semibold text-slate-800">
-              AlphaSentience · ROSTR Autonomous Agent OS
+            <span className="font-bold text-slate-900">
+              Sentinel · Trading
             </span>
             <span aria-hidden="true">·</span>
-            <span>One Must Act Wholeness (W = 1.00)</span>
+            <span className="font-semibold text-blue-700">Know. Believe. Buy.</span>
             <span aria-hidden="true">·</span>
-            <span>Middle-Out DAG (11ms)</span>
-            <span aria-hidden="true">·</span>
-            <span>POP 11-Artifact Engine</span>
+            <span>Save your life. Invest your future. Research the present.</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-500">
