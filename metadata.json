@@ -1,0 +1,8 @@
+{
+  "name": "AlphaSentience AI",
+  "description": "An institutional-grade market intelligence platform. It aggregates global news, social sentiment, and market data using Gemini AI to generate daily actionable trading strategies (Buys, Puts, Calls, Sells).",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
