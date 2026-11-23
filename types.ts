@@ -425,6 +425,7 @@ export interface MarketReport {
   secondOrderChains?: SecondOrderCommodityChain[];
   aiMode?: 'live' | 'cached-live' | 'quant-synthesis';
   aiNotice?: string;
+  aiKeyStatus?: 'none' | 'ok' | 'rejected' | 'rate-limited' | 'error';
 }
 
 export interface ChatMessage {

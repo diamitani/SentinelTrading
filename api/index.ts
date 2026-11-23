@@ -1,36 +1,73 @@
 import express from 'express';
-import { GoogleGenAI } from '@google/genai';
+import { createHash } from 'crypto';
+import { generateText } from 'ai';
 
 const app = express();
 
-app.use(express.json({ limit: '50mb' }));
+// Small body limit: this API only receives short JSON (wizard settings, chat text).
+app.use(express.json({ limit: '2mb' }));
 
-// Shared Gemini client initialized server-side with User-Agent header
-const apiKey = (process.env.GEMINI_API_KEY || process.env.API_KEY || '').trim();
-const hasValidGeminiKey = Boolean(
-  apiKey &&
-  apiKey !== 'PLACEHOLDER_API_KEY' &&
-  !apiKey.toLowerCase().includes('placeholder') &&
-  apiKey.length > 10
-);
+// ============================================================================
+// AI via Vercel AI Gateway, with Bring-Your-Own-Key (BYOK) per user
+//
+//  - Each user pastes their OWN Google Gemini key in the app. The browser sends it
+//    in the `x-user-ai-key` header with every AI request.
+//  - The key is used for that single request only (Gateway request-scoped BYOK).
+//    It is never stored on the server, never put in a cache key, never logged.
+//  - No key => no AI call. The user gets built-in sample data instead, so the
+//    app owner's Gateway credits are never spent on anonymous visitors.
+//  - On Vercel the Gateway authenticates automatically (OIDC). Locally, set
+//    AI_GATEWAY_API_KEY.
+// ============================================================================
+const AI_MODEL = (process.env.AI_MODEL || 'google/gemini-3-flash').trim();
+const AI_TIMEOUT_MS = 25_000;
+const GEMINI_KEY_PATTERN = /^AIza[0-9A-Za-z_-]{30,60}$/;
 
-const ai = hasValidGeminiKey
-  ? new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        },
+type AiKeyStatus = 'none' | 'ok' | 'rejected' | 'rate-limited' | 'error';
+
+function getUserAiKey(req: express.Request): string | null {
+  const raw = req.header('x-user-ai-key');
+  if (!raw) return null;
+  const key = raw.trim();
+  return GEMINI_KEY_PATTERN.test(key) ? key : null;
+}
+
+// Short, one-way fingerprint so we can keep per-user caches/cooldowns
+// without ever storing the key itself.
+function keyFingerprint(key: string): string {
+  return createHash('sha256').update(key).digest('hex').slice(0, 16);
+}
+
+async function generateWithUserKey(userKey: string, prompt: string): Promise<string> {
+  const result = await generateText({
+    model: AI_MODEL,
+    prompt,
+    abortSignal: AbortSignal.timeout(AI_TIMEOUT_MS),
+    providerOptions: {
+      gateway: {
+        // Only route to Google AI Studio, i.e. the provider the user's key belongs to.
+        only: ['google'],
+        byok: { google: [{ apiKey: userKey }] },
       },
-    })
-  : null;
+    },
+  });
+  return result.text || '';
+}
 
-const MODEL_NAME = 'gemini-3.8-flash';
+// Bounded in-memory helpers (per server instance). On serverless these are a
+// best-effort optimisation only; correctness never depends on them.
+const MAX_TRACKED = 500;
+function setBounded<V>(map: Map<string, V>, key: string, value: V) {
+  if (map.size >= MAX_TRACKED) {
+    const oldest = map.keys().next().value;
+    if (oldest !== undefined) map.delete(oldest);
+  }
+  map.set(key, value);
+}
 
-// Server-side response cache & 429 quota cooldown circuit-breaker
 const ANALYSIS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const QUOTA_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
-let geminiQuotaCooldownUntil = 0;
+const QUOTA_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes, per user key
+const quotaCooldownUntil = new Map<string, number>();
 
 interface CachedAnalysisEntry {
   data: any;
@@ -39,11 +76,15 @@ interface CachedAnalysisEntry {
 }
 const analysisCache = new Map<string, CachedAnalysisEntry>();
 
+function errText(err: any): string {
+  return String(err?.message || err?.cause?.message || err || '');
+}
+
 function isQuotaOrRateLimitError(err: any): boolean {
   if (!err) return false;
-  const status = err?.status || err?.code;
+  const status = err?.statusCode || err?.status || err?.code || err?.cause?.statusCode;
   if (status === 429) return true;
-  const msg = String(err?.message || err || '');
+  const msg = errText(err);
   return (
     msg.includes('429') ||
     msg.includes('RESOURCE_EXHAUSTED') ||
@@ -51,6 +92,41 @@ function isQuotaOrRateLimitError(err: any): boolean {
     msg.toLowerCase().includes('rate limit')
   );
 }
+
+function isAuthError(err: any): boolean {
+  const status = err?.statusCode || err?.status || err?.code || err?.cause?.statusCode;
+  if (status === 401 || status === 403) return true;
+  const msg = errText(err).toLowerCase();
+  return (
+    msg.includes('api key not valid') ||
+    msg.includes('api_key_invalid') ||
+    msg.includes('unauthorized') ||
+    msg.includes('permission denied') ||
+    msg.includes('invalid api key')
+  );
+}
+
+function classifyAiError(err: any): { status: AiKeyStatus; notice: string } {
+  if (isQuotaOrRateLimitError(err)) {
+    return {
+      status: 'rate-limited',
+      notice: 'Your Gemini key hit its rate limit or quota. Showing sample data; try again in a few minutes.',
+    };
+  }
+  if (isAuthError(err)) {
+    return {
+      status: 'rejected',
+      notice: 'Your Gemini API key was rejected. Open "AI Key" and check it. Showing sample data.',
+    };
+  }
+  return {
+    status: 'error',
+    notice: 'The AI request failed. Showing sample data; please try again.',
+  };
+}
+
+const NO_KEY_NOTICE =
+  'Showing sample data. Add your own Gemini API key (AI Key button) to run live AI analysis.';
 
 // Active Hypothesis, Philosophy & Goals Wizard State
 export interface ServerWizardConfig {
@@ -65,7 +141,7 @@ export interface ServerWizardConfig {
   autoOptimizeWholeness: boolean;
 }
 
-let activeWizardConfig: ServerWizardConfig = {
+const DEFAULT_WIZARD: ServerWizardConfig = {
   hypothesisPrompt:
     'High Pepsi canned beverage sales rollout creating packaging sheet coil shortage -> CME Aluminum (ALI=F) & Alcoa (AA) calls + Polymarket/Kalshi inflation event spread; AI chip CoWoS capacity surge -> NVDA/TSM dual-listing arbitrage.',
   philosophy: 'Second-Order Commodity Ripples',
@@ -77,6 +153,38 @@ let activeWizardConfig: ServerWizardConfig = {
   maxDrawdownPct: 0.65,
   autoOptimizeWholeness: true,
 };
+
+// Wizard settings belong to ONE request, never to the server. (A module-level
+// variable would be shared by every user on the same server instance.)
+function resolveWizard(body: any): ServerWizardConfig {
+  const src = body && typeof body === 'object' ? body : {};
+  const w = src.wizardConfig && typeof src.wizardConfig === 'object' ? src.wizardConfig : {};
+  const str = (v: any, fallback: string, max: number) =>
+    typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : fallback;
+  const num = (v: any, fallback: number, min: number, max: number) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+  };
+  const thesis = [src.thesis, src.prompt].find(
+    (t) => typeof t === 'string' && t.trim().length > 5
+  ) as string | undefined;
+  const assets = Array.isArray(w.assetClasses)
+    ? w.assetClasses.filter((a: any) => typeof a === 'string' && a.trim()).slice(0, 10).map((a: string) => a.trim().slice(0, 40))
+    : [];
+  return {
+    // An explicitly typed thesis wins over the saved wizard text.
+    hypothesisPrompt: str(thesis || w.hypothesisPrompt, DEFAULT_WIZARD.hypothesisPrompt, 2000),
+    philosophy: str(w.philosophy, DEFAULT_WIZARD.philosophy, 80),
+    goalTarget: str(w.goalTarget, DEFAULT_WIZARD.goalTarget, 40),
+    targetReturnPct: num(w.targetReturnPct, DEFAULT_WIZARD.targetReturnPct, 0.1, 1000),
+    holdingHorizon: str(w.holdingHorizon, DEFAULT_WIZARD.holdingHorizon, 40),
+    assetClasses: assets.length ? assets : DEFAULT_WIZARD.assetClasses,
+    capitalAllocated: num(w.capitalAllocated, DEFAULT_WIZARD.capitalAllocated, 1, 1e10),
+    maxDrawdownPct: num(w.maxDrawdownPct, DEFAULT_WIZARD.maxDrawdownPct, 0.01, 50),
+    autoOptimizeWholeness:
+      typeof w.autoOptimizeWholeness === 'boolean' ? w.autoOptimizeWholeness : DEFAULT_WIZARD.autoOptimizeWholeness,
+  };
+}
 
 // Active Diagrid Virtual Actor State
 let activeDiagridActorState: {
@@ -295,7 +403,7 @@ function getOmnichannelNodes() {
   ];
 }
 
-function getSecondOrderChains(wizard: ServerWizardConfig = activeWizardConfig) {
+function getSecondOrderChains(wizard: ServerWizardConfig = DEFAULT_WIZARD) {
   const customChain = {
     primaryEvent: `Active Hypothesis (${wizard.holdingHorizon} · ${wizard.goalTarget}): ${wizard.hypothesisPrompt.slice(0, 115)}`,
     derivedHypothesis: `ROSTR Middle-Out DAG mapped second-order supply chain & cross-venue pricing lag under ${wizard.philosophy}.`,
@@ -334,7 +442,7 @@ function getSecondOrderChains(wizard: ServerWizardConfig = activeWizardConfig) {
   ];
 }
 
-function buildDefaultQuantMacroData() {
+function buildDefaultQuantMacroData(wizard: ServerWizardConfig = DEFAULT_WIZARD) {
   return {
     overallSentimentScore: 58,
     sentimentBreakdown: { newsSentiment: 61, socialSentiment: 72, politicalImpact: -14, volatility: 29 },
@@ -413,8 +521,8 @@ function buildDefaultQuantMacroData() {
       },
     ],
     portfolioStrategy: {
-      sectorRotation: `Prioritize ${activeWizardConfig.philosophy} with ${activeWizardConfig.holdingHorizon} cadence targeting ${activeWizardConfig.goalTarget} (+${activeWizardConfig.targetReturnPct}%).`,
-      riskManagement: `Enforce One Must Act Wholeness (W = 1.00) and ${activeWizardConfig.maxDrawdownPct}% max single-leg drawdown stop.`,
+      sectorRotation: `Prioritize ${wizard.philosophy} with ${wizard.holdingHorizon} cadence targeting ${wizard.goalTarget} (+${wizard.targetReturnPct}%).`,
+      riskManagement: `Enforce One Must Act Wholeness (W = 1.00) and ${wizard.maxDrawdownPct}% max single-leg drawdown stop.`,
       suggestedAllocation: { cash: 15, equity: 45, crypto: 15, derivatives: 25 },
     },
     newsFeed: [
@@ -581,7 +689,7 @@ let plaidState: PlaidState = {
 function generate100ArbitrageTrades(
   macroContext: any,
   thesisWants: string,
-  wizard: ServerWizardConfig = activeWizardConfig
+  wizard: ServerWizardConfig = DEFAULT_WIZARD
 ): any[] {
   const arbitrageCategories = [
     { type: 'Cross-Exchange', venueA: 'NYSE / NASDAQ', venueB: 'Dark Pool ATS / Direct Cross' },
@@ -1083,7 +1191,7 @@ function generate100ArbitrageTrades(
 // (One Must Act Calculus + Middle-Out DAG Compressor + Diagrid Actor +
 //  Calibrated Truth Protocol + POP 11-Artifact Engine)
 // ============================================================================
-async function compileRostrHarnessRun(wizard: ServerWizardConfig = activeWizardConfig) {
+async function compileRostrHarnessRun(wizard: ServerWizardConfig = DEFAULT_WIZARD) {
   const promptText = (wizard.hypothesisPrompt || '').trim();
   const lower = promptText.toLowerCase();
 
@@ -1639,7 +1747,8 @@ graph LR
 ## 1. Environment & Secrets Configuration
 Configure the following server-side variables in Vercel / AI Studio Secrets (never exposed to client bundle):
 \`\`\`bash
-GEMINI_API_KEY="your-server-side-gemini-key"
+# AI runs through Vercel AI Gateway. Users bring their own Gemini key (BYOK) in the app.
+# Locally only: AI_GATEWAY_API_KEY="your-ai-gateway-key"   (on Vercel this is automatic)
 SUPABASE_URL="https://your-project.supabase.co"
 SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
 DIAGRID_CATALYST_ENDPOINT="https://catalyst.diagrid.io/v1/actors"
@@ -1796,7 +1905,7 @@ inputs:
 function compilePalThesisRuntime(
   rawThesisText: string,
   customLinks: string[] = [],
-  wizard: ServerWizardConfig = activeWizardConfig
+  wizard: ServerWizardConfig = DEFAULT_WIZARD
 ): any {
   const wordCount = rawThesisText.split(/\s+/).filter(Boolean).length;
 
@@ -1934,23 +2043,17 @@ ${
 // API Route: Market Analysis Generation, ROSTR Harness & 100-Trade Synthesis
 app.post('/api/gemini/analysis', async (req, res) => {
   const startTime = performance.now();
+  const activeWizardConfig = resolveWizard(req.body);
+  const userKey = getUserAiKey(req);
   try {
-    if (req.body?.wizardConfig) {
-      activeWizardConfig = {
-        ...activeWizardConfig,
-        ...req.body.wizardConfig,
-      };
-    } else if (req.body?.thesis && typeof req.body.thesis === 'string' && req.body.thesis.trim().length > 5) {
-      activeWizardConfig = {
-        ...activeWizardConfig,
-        hypothesisPrompt: req.body.thesis.trim(),
-      };
-    }
-
     const userThesis = activeWizardConfig.hypothesisPrompt;
-    const customLinks = req.body?.links || [];
+    const customLinks: string[] = Array.isArray(req.body?.links)
+      ? req.body.links.filter((l: any) => typeof l === 'string').slice(0, 20).map((l: string) => l.slice(0, 500))
+      : [];
 
-    const cacheKey = `${userThesis.trim().toLowerCase()}|${activeWizardConfig.philosophy}|${activeWizardConfig.holdingHorizon}|${activeWizardConfig.targetReturnPct}`;
+    // Cache is per user key fingerprint, so users never see each other's AI results.
+    const keyId = userKey ? keyFingerprint(userKey) : 'nokey';
+    const cacheKey = `${keyId}|${userThesis.trim().toLowerCase()}|${activeWizardConfig.philosophy}|${activeWizardConfig.holdingHorizon}|${activeWizardConfig.targetReturnPct}`;
     const now = Date.now();
     const cachedEntry = analysisCache.get(cacheKey);
 
@@ -1958,12 +2061,14 @@ app.post('/api/gemini/analysis', async (req, res) => {
     let sources: { title: string; uri: string }[] = [];
     let aiMode: 'live' | 'cached-live' | 'quant-synthesis' = 'quant-synthesis';
     let aiNotice: string | undefined;
+    let aiKeyStatus: AiKeyStatus = userKey ? 'ok' : 'none';
+    if (!userKey) aiNotice = NO_KEY_NOTICE;
 
     if (cachedEntry && now < cachedEntry.expiresAt) {
       data = cachedEntry.data;
       sources = cachedEntry.sources;
       aiMode = 'cached-live';
-    } else if (ai && now >= geminiQuotaCooldownUntil) {
+    } else if (userKey && now >= (quotaCooldownUntil.get(keyId) || 0)) {
       try {
         const prompt = `
           Perform the ROSTR DAILY TRADING & ARBITRAGE CYCLE for ${new Date().toLocaleDateString()}.
@@ -1973,14 +2078,10 @@ app.post('/api/gemini/analysis', async (req, res) => {
           Return Goal: "${activeWizardConfig.goalTarget} (+${activeWizardConfig.targetReturnPct}%)".
           Return strictly valid JSON matching macroMetrics, sectorPerformance, politicalRisks, geopoliticalUpdates, keyTrends, portfolioStrategy, newsFeed, overallSentimentScore, sentimentBreakdown, socialSentimentSummary, institutionalFlow.
         `;
-        const response: any = await ai.models.generateContent({
-          model: MODEL_NAME,
-          contents: prompt,
-          config: {
-            tools: [{ googleSearch: {} }],
-          },
-        });
-        let jsonText = (response.text || '{}').replace(/```json/g, '').replace(/```/g, '').trim();
+        let jsonText = (await generateWithUserKey(userKey, prompt) || '{}')
+          .replace(/```json/g, '')
+          .replace(/```/g, '')
+          .trim();
         const startIndex = jsonText.indexOf('{');
         const endIndex = jsonText.lastIndexOf('}');
         if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
@@ -1990,29 +2091,29 @@ app.post('/api/gemini/analysis', async (req, res) => {
         if (parsed && parsed.macroMetrics && parsed.sectorPerformance) {
           data = parsed;
           aiMode = 'live';
-          const groundingChunks = (response?.candidates?.[0]?.groundingMetadata?.groundingChunks as any[]) || [];
-          sources = groundingChunks
-            .map((chunk) => (chunk?.web ? { title: chunk.web.title, uri: chunk.web.uri } : null))
-            .filter((s): s is { title: string; uri: string } => s !== null);
-
-          analysisCache.set(cacheKey, {
+          setBounded(analysisCache, cacheKey, {
             data,
             sources,
             expiresAt: Date.now() + ANALYSIS_CACHE_TTL_MS,
           });
+        } else {
+          aiKeyStatus = 'error';
+          aiNotice = 'The AI answered in an unexpected format. Showing sample data; please try again.';
         }
       } catch (modelErr: any) {
-        if (isQuotaOrRateLimitError(modelErr)) {
-          geminiQuotaCooldownUntil = Date.now() + QUOTA_COOLDOWN_MS;
-          console.info('Gemini API quota cooldown active (5m). Serving ROSTR quant synthesis core.');
-        } else {
-          console.info('Gemini live query unavailable; serving ROSTR quant synthesis core.');
-        }
+        const { status, notice } = classifyAiError(modelErr);
+        if (status === 'rate-limited') setBounded(quotaCooldownUntil, keyId, Date.now() + QUOTA_COOLDOWN_MS);
+        aiKeyStatus = status;
+        aiNotice = notice;
+        console.info(`AI request failed (${status}); serving sample data.`);
       }
+    } else if (userKey) {
+      aiKeyStatus = 'rate-limited';
+      aiNotice = 'Your Gemini key is cooling down after a rate limit. Showing sample data for a moment.';
     }
 
     if (!data || !data.macroMetrics || !data.sectorPerformance) {
-      data = buildDefaultQuantMacroData();
+      data = buildDefaultQuantMacroData(activeWizardConfig);
     }
 
     const palSession = compilePalThesisRuntime(userThesis, customLinks, activeWizardConfig);
@@ -2050,6 +2151,7 @@ app.post('/api/gemini/analysis', async (req, res) => {
       secondOrderChains: getSecondOrderChains(activeWizardConfig),
       aiMode,
       aiNotice,
+      aiKeyStatus,
     };
 
     return res.json(fullReport);
@@ -2057,7 +2159,7 @@ app.post('/api/gemini/analysis', async (req, res) => {
     const palSession = compilePalThesisRuntime(activeWizardConfig.hypothesisPrompt, [], activeWizardConfig);
     const rostrRun = await compileRostrHarnessRun(activeWizardConfig);
     const trades = generate100ArbitrageTrades({}, activeWizardConfig.hypothesisPrompt, activeWizardConfig);
-    const fallbackData = buildDefaultQuantMacroData();
+    const fallbackData = buildDefaultQuantMacroData(activeWizardConfig);
     return res.json({
       ...fallbackData,
       recommendations: trades,
@@ -2075,19 +2177,16 @@ app.post('/api/gemini/analysis', async (req, res) => {
       omnichannelNodes: getOmnichannelNodes(),
       secondOrderChains: getSecondOrderChains(activeWizardConfig),
       aiMode: 'quant-synthesis',
+      aiNotice: userKey ? 'Analysis hit an error. Showing sample data; please try again.' : NO_KEY_NOTICE,
+      aiKeyStatus: userKey ? 'error' : 'none',
     });
   }
 });
 
 // API Route: Dedicated ROSTR Autonomous Agent OS Execution (Wizard Submit & Live Re-Compilation)
 app.post('/api/rostr/execute', async (req, res) => {
+  const activeWizardConfig = resolveWizard(req.body);
   try {
-    if (req.body?.wizardConfig) {
-      activeWizardConfig = {
-        ...activeWizardConfig,
-        ...req.body.wizardConfig,
-      };
-    }
     supabaseMirrorStore.pal_sessions += 1;
     supabaseMirrorStore.pal_prompts += 1;
     supabaseMirrorStore.pal_runs += 1;
@@ -2095,7 +2194,7 @@ app.post('/api/rostr/execute', async (req, res) => {
 
     const rostrRun = await compileRostrHarnessRun(activeWizardConfig);
     const palSession = compilePalThesisRuntime(activeWizardConfig.hypothesisPrompt, [], activeWizardConfig);
-    const macroData = buildDefaultQuantMacroData();
+    const macroData = buildDefaultQuantMacroData(activeWizardConfig);
     const recommendations = generate100ArbitrageTrades(macroData, activeWizardConfig.hypothesisPrompt, activeWizardConfig);
     supabaseMirrorStore.lastRunId = rostrRun.runId;
 
@@ -2115,6 +2214,7 @@ app.post('/api/rostr/execute', async (req, res) => {
 
 // API Route: Diagrid Catalyst Virtual Actor /raiseEvent & Zero-Compute Sleep Toggle
 app.post('/api/rostr/diagrid/raise-event', (req, res) => {
+  const activeWizardConfig = resolveWizard(req.body);
   const { action, payload } = req.body || {};
   if (action === 'SUSPEND_ZERO_COMPUTE') {
     activeDiagridActorState = {
@@ -2145,6 +2245,7 @@ app.post('/api/rostr/diagrid/raise-event', (req, res) => {
 
 // API Route: Interactive Agent Sandbox (Executes any ROSTR skill or sub-agent live)
 app.post('/api/sandbox/execute', async (req, res) => {
+  const activeWizardConfig = resolveWizard(req.body);
   const { skillId, inputPayload } = req.body || {};
   const chosenSkill = skillId || 'commodity-ripple-scout';
   const customInput = inputPayload || activeWizardConfig.hypothesisPrompt;
@@ -2239,6 +2340,7 @@ app.post('/api/composio/toggle', (req, res) => {
 });
 
 app.post('/api/composio/execute', (req, res) => {
+  const activeWizardConfig = resolveWizard(req.body);
   const { id, action } = req.body || {};
   const timestamp = new Date().toLocaleTimeString();
   composioIntegrationsState = composioIntegrationsState.map((item) => {
@@ -2307,12 +2409,8 @@ app.get('/api/supabase/status', (req, res) => {
 // API Route: PAL 10-Step Thesis Intake Compiler
 app.post('/api/pal/intake', async (req, res) => {
   try {
-    const { prompt, links, riskTolerance, capitalBudget, wizardConfig } = req.body || {};
-    if (wizardConfig) {
-      activeWizardConfig = { ...activeWizardConfig, ...wizardConfig };
-    } else if (prompt) {
-      activeWizardConfig = { ...activeWizardConfig, hypothesisPrompt: prompt };
-    }
+    const { prompt, links, riskTolerance, capitalBudget } = req.body || {};
+    const activeWizardConfig = resolveWizard(req.body);
     const palSession = compilePalThesisRuntime(activeWizardConfig.hypothesisPrompt, links || [], activeWizardConfig);
     if (riskTolerance) palSession.rawInputs.riskTolerance = riskTolerance;
     if (capitalBudget) palSession.rawInputs.capitalBudget = capitalBudget;
@@ -2374,8 +2472,15 @@ app.post('/api/plaid/sync', (req, res) => {
 
 // API Route: Tactical Chat Assistant (ROSTR Agent OS & Quant Co-Pilot)
 app.post('/api/gemini/chat', async (req, res) => {
+  const userKey = getUserAiKey(req);
+  let aiKeyStatus: AiKeyStatus = userKey ? 'ok' : 'none';
   try {
-    const { report, history, newMessage } = req.body;
+    const { report, history } = req.body || {};
+    const activeWizardConfig = resolveWizard({
+      wizardConfig: req.body?.wizardConfig || report?.wizardConfig,
+    });
+    const newMessage: string =
+      typeof req.body?.newMessage === 'string' ? req.body.newMessage.trim().slice(0, 4000) : '';
 
     if (!newMessage) {
       return res.status(400).json({ error: 'newMessage is required' });
@@ -2388,7 +2493,7 @@ app.post('/api/gemini/chat', async (req, res) => {
       One Must Act Wholeness: W = 1.00 | Middle-Out DAG Latency: 11ms (99.96% collapse from 31,450ms).
       
       USER HISTORY:
-      ${Array.isArray(history) ? history.map((m: any) => `${(m.role || 'USER').toUpperCase()}: ${m.text || ''}`).join('\n') : ''}
+      ${Array.isArray(history) ? history.slice(-10).map((m: any) => `${String(m?.role || 'USER').toUpperCase().slice(0, 10)}: ${String(m?.text || '').slice(0, 1500)}`).join('\n') : ''}
       
       USER QUESTION:
       ${newMessage}
@@ -2397,23 +2502,18 @@ app.post('/api/gemini/chat', async (req, res) => {
     `;
 
     let text = '';
-    if (ai && Date.now() >= geminiQuotaCooldownUntil) {
+    const keyId = userKey ? keyFingerprint(userKey) : '';
+    if (userKey && Date.now() >= (quotaCooldownUntil.get(keyId) || 0)) {
       try {
-        const callPromise = ai.models.generateContent({
-          model: MODEL_NAME,
-          contents: contextPrompt,
-        });
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('AI Gateway Timeout')), 4000)
-        );
-        const response: any = await Promise.race([callPromise, timeoutPromise]);
-        text = response.text || '';
+        text = await generateWithUserKey(userKey, contextPrompt);
       } catch (chatModelErr: any) {
-        if (isQuotaOrRateLimitError(chatModelErr)) {
-          geminiQuotaCooldownUntil = Date.now() + QUOTA_COOLDOWN_MS;
-          console.info('Chat Gemini quota cooldown active (5m). Serving ROSTR local quant response engine.');
-        }
+        const { status } = classifyAiError(chatModelErr);
+        aiKeyStatus = status;
+        if (status === 'rate-limited') setBounded(quotaCooldownUntil, keyId, Date.now() + QUOTA_COOLDOWN_MS);
+        console.info(`Chat AI request failed (${status}); serving built-in co-pilot answer.`);
       }
+    } else if (userKey) {
+      aiKeyStatus = 'rate-limited';
     }
 
     if (!text) {
@@ -2435,11 +2535,51 @@ app.post('/api/gemini/chat', async (req, res) => {
       }
     }
 
-    return res.json({ text });
+    return res.json({ text, aiKeyStatus });
   } catch {
     return res.json({
+      aiKeyStatus,
       text: '[ROSTR Co-Pilot] Middle-Out DAG online (11ms). Monitoring 100 cross-venue arbitrage & prediction market signals across Plaid DMA accounts.',
     });
+  }
+});
+
+// API Route: AI status (is the Gateway set up on the server?)
+app.get('/api/ai/status', (_req, res) => {
+  return res.json({
+    model: AI_MODEL,
+    // On Vercel the Gateway authenticates with OIDC automatically; locally it needs a key.
+    gatewayReady: Boolean(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN || process.env.VERCEL),
+    byokRequired: true,
+  });
+});
+
+// API Route: check a user's Gemini key BEFORE it is saved in their browser.
+// This calls Google directly (cheap "list models" request) so that a bad key
+// is caught here instead of failing later inside the Gateway.
+app.post('/api/ai/validate', async (req, res) => {
+  const key = getUserAiKey(req);
+  if (!key) {
+    return res.json({
+      valid: false,
+      reason: 'That does not look like a Google Gemini key. Gemini keys start with "AIza".',
+    });
+  }
+  try {
+    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', {
+      headers: { 'x-goog-api-key': key },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (r.ok) return res.json({ valid: true });
+    if (r.status === 400 || r.status === 401 || r.status === 403) {
+      return res.json({ valid: false, reason: 'Google rejected this key. Check it and try again.' });
+    }
+    if (r.status === 429) {
+      return res.json({ valid: true, warning: 'Key accepted, but it is currently rate limited.' });
+    }
+    return res.json({ valid: false, reason: `Google returned an unexpected response (${r.status}).` });
+  } catch {
+    return res.status(502).json({ valid: false, reason: 'Could not reach Google to check the key. Try again.' });
   }
 });
 
@@ -2533,6 +2673,7 @@ app.get('/api/qa/audit', (req, res) => {
 
 // API Route: 10x Growth Simulator ($100 to $1,000+ Compounding Engine)
 app.post('/api/growth/simulate', (req, res) => {
+  const activeWizardConfig = resolveWizard(req.body);
   const initial = Number(req.body?.initialCapital) || 100;
   const monthlyAdd = Number(req.body?.monthlyContribution) || 25;
   const months = Number(req.body?.timeframeMonths) || 12;

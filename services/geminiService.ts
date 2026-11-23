@@ -9,21 +9,30 @@ import {
   SandboxExecutionResult,
   ComposioIntegration,
 } from '../types';
+import { aiKeyHeaders } from './aiKeyService';
+
+// Latest wizard settings, attached to requests so the stateless server can use them.
+let currentWizard: Partial<HypothesisWizardConfig> | undefined;
+export const setCurrentWizard = (cfg?: Partial<HypothesisWizardConfig>) => {
+  if (cfg) currentWizard = cfg;
+};
 
 export const fetchMarketAnalysis = async (
   thesisPrompt?: string,
   thesisLinks?: string[],
   wizardConfig?: Partial<HypothesisWizardConfig>
 ): Promise<MarketReport> => {
+  if (wizardConfig) setCurrentWizard(wizardConfig);
   const response = await fetch('/api/gemini/analysis', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...aiKeyHeaders(),
     },
     body: JSON.stringify({
       thesis: thesisPrompt,
       links: thesisLinks,
-      wizardConfig,
+      wizardConfig: wizardConfig || currentWizard,
     }),
   });
 
@@ -33,6 +42,7 @@ export const fetchMarketAnalysis = async (
   }
 
   const data: MarketReport = await response.json();
+  setCurrentWizard(data.wizardConfig);
   return data;
 };
 
@@ -46,6 +56,7 @@ export const executeRostrHarness = async (
   secondOrderChains: any[];
   omnichannelNodes: any[];
 }> => {
+  setCurrentWizard(wizardConfig);
   const response = await fetch('/api/rostr/execute', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -66,7 +77,7 @@ export const raiseDiagridActorEvent = async (
   const response = await fetch('/api/rostr/diagrid/raise-event', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, payload }),
+    body: JSON.stringify({ action, payload, wizardConfig: currentWizard }),
   });
 
   if (!response.ok) {
@@ -84,7 +95,7 @@ export const executeSandboxSkill = async (
   const response = await fetch('/api/sandbox/execute', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ skillId, inputPayload }),
+    body: JSON.stringify({ skillId, inputPayload, wizardConfig: currentWizard }),
   });
 
   if (!response.ok) {
@@ -123,7 +134,7 @@ export const executeComposioAction = async (
   const response = await fetch('/api/composio/execute', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id, action }),
+    body: JSON.stringify({ id, action, wizardConfig: currentWizard }),
   });
   if (!response.ok) {
     throw new Error('Failed to execute Composio action');
@@ -156,6 +167,7 @@ export const submitPalThesis = async (
       links,
       riskTolerance,
       capitalBudget,
+      wizardConfig: currentWizard,
     }),
   });
 
@@ -212,10 +224,12 @@ export const queryReportAgent = async (
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...aiKeyHeaders(),
       },
       body: JSON.stringify({
-        report,
-        history,
+        // Only the wizard settings are needed server-side; avoid re-sending the whole report.
+        wizardConfig: report?.wizardConfig || currentWizard,
+        history: history.slice(-10),
         newMessage,
       }),
     });
@@ -252,6 +266,7 @@ export const fetchGrowthSimulation = async (
       initialCapital,
       monthlyContribution,
       timeframeMonths: 12,
+      wizardConfig: currentWizard,
     }),
   });
   if (!response.ok) {

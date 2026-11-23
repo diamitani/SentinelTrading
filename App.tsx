@@ -27,6 +27,8 @@ import { ChatAssistant } from './components/ChatAssistant';
 import { NewsTicker } from './components/NewsTicker';
 import { MarketingHero } from './components/MarketingHero';
 import { AuthModal } from './components/AuthModal';
+import { AiKeyModal } from './components/AiKeyModal';
+import { getAiKey, onAiKeyChange } from './services/aiKeyService';
 import { HypothesisWizardModal } from './components/HypothesisWizardModal';
 import { AgentSandboxComposioView } from './components/AgentSandboxComposioView';
 
@@ -88,6 +90,18 @@ const App: React.FC = () => {
   // Auth state
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  // Bring-your-own-key AI state
+  const [isAiKeyModalOpen, setIsAiKeyModalOpen] = useState(false);
+  const [hasAiKey, setHasAiKey] = useState<boolean>(Boolean(getAiKey()));
+  useEffect(() => onAiKeyChange(() => setHasAiKey(Boolean(getAiKey()))), []);
+
+  // After the key is added/removed, reload the analysis so the dashboard switches modes.
+  const refreshAfterKeyChange = () => {
+    fetchMarketAnalysis()
+      .then((fresh) => setReport(fresh))
+      .catch((err) => console.error(err));
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -374,6 +388,20 @@ const App: React.FC = () => {
               ✦ Hypothesis Wizard
             </button>
 
+            <button
+              type="button"
+              onClick={() => setIsAiKeyModalOpen(true)}
+              title={hasAiKey ? 'Live AI is running on your own Gemini key' : 'Add your Gemini key to turn on live AI'}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
+                hasAiKey
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${hasAiKey ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+              {hasAiKey ? 'AI: your key' : 'AI Key'}
+            </button>
+
             {currentUser ? (
               <div className="hidden sm:flex items-center gap-2">
                 <div className="text-right max-w-[130px]">
@@ -515,6 +543,23 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* AI status notice (sample data / key problems) */}
+      {report.aiNotice && (
+        <div
+          role="status"
+          className="bg-amber-50 border-b border-amber-200 py-2 px-4 text-center text-xs text-amber-900 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 z-30"
+        >
+          <span>{report.aiNotice}</span>
+          <button
+            type="button"
+            onClick={() => setIsAiKeyModalOpen(true)}
+            className="font-semibold underline hover:text-amber-950"
+          >
+            {hasAiKey ? 'Check my key' : 'Add my key'}
+          </button>
+        </div>
+      )}
+
       {/* Running Headline Ticker */}
       <NewsTicker news={report.newsFeed} />
 
@@ -617,6 +662,12 @@ const App: React.FC = () => {
         initialConfig={report.wizardConfig}
         onClose={() => setIsWizardOpen(false)}
         onSubmit={handleWizardSubmit}
+      />
+
+      <AiKeyModal
+        isOpen={isAiKeyModalOpen}
+        onClose={() => setIsAiKeyModalOpen(false)}
+        onChanged={refreshAfterKeyChange}
       />
 
       {/* Auth Modal Drawer */}
