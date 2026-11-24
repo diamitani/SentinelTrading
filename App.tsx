@@ -29,25 +29,39 @@ import { MarketingHero } from './components/MarketingHero';
 import { AuthModal } from './components/AuthModal';
 import { HypothesisWizardModal } from './components/HypothesisWizardModal';
 import { AgentSandboxComposioView } from './components/AgentSandboxComposioView';
+import { ResearchView } from './components/ResearchView';
+import { useResearch } from './components/research/useResearch';
+import { ResearchFocus } from './services/answerEngine';
+import {
+  DisclosuresModal,
+  RiskAcknowledgementGate,
+  PaperTradeConfirm,
+  SHORT_DISCLOSURE,
+} from './components/compliance/Compliance';
 
 const PRIMARY_NAV_ITEMS: { id: AppView; label: string }[] = [
-  { id: AppView.DASHBOARD, label: 'Command Dashboard' },
-  { id: AppView.PAL_RUNTIME, label: 'ROSTR & POP 11' },
-  { id: AppView.ARBITRAGE_100, label: '100 Trades' },
-  { id: AppView.AGENT_SANDBOX, label: 'Sandbox & Composio' },
-  { id: AppView.GROWTH_10X, label: '10x Growth' },
+  { id: AppView.DASHBOARD, label: 'Overview' },
+  { id: AppView.RESEARCH, label: 'Ask Sentinel' },
+  { id: AppView.ARBITRAGE_100, label: 'Research Ideas' },
+  { id: AppView.PAL_RUNTIME, label: 'Strategy Studio' },
+  { id: AppView.GROWTH_10X, label: 'Growth Simulator' },
 ];
 
 const SECONDARY_NAV_ITEMS: { id: AppView; label: string; description: string }[] = [
   {
+    id: AppView.AGENT_SANDBOX,
+    label: 'Agent Sandbox',
+    description: 'Run research skills & integrations',
+  },
+  {
     id: AppView.OMNICHANNEL_HYPOTHESIS,
-    label: 'Omnichannel Firehose',
-    description: '7 live streams & second-order commodity ripples',
+    label: 'Signal Feeds',
+    description: 'News, social & prediction-market signals',
   },
   {
     id: AppView.PLAID_PORTFOLIO,
-    label: 'Plaid DMA Ledger',
-    description: 'Prime brokerage balances & holdings',
+    label: 'Portfolio',
+    description: 'Linked account balances & holdings',
   },
   {
     id: AppView.ANALYSIS,
@@ -56,8 +70,8 @@ const SECONDARY_NAV_ITEMS: { id: AppView; label: string; description: string }[]
   },
   {
     id: AppView.BACKEND_QA,
-    label: 'Backend QA & RLS',
-    description: 'Security, Supabase RLS & runtime verification',
+    label: 'Security & QA',
+    description: 'Data security & system checks',
   },
 ];
 
@@ -84,6 +98,17 @@ const App: React.FC = () => {
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const dashboardAnchorRef = useRef<HTMLElement>(null);
+
+  // Shared research engine (full Ask page + floating assistant)
+  const research = useResearch();
+  const [pendingQuery, setPendingQuery] = useState<{ query: string; focus: ResearchFocus } | null>(null);
+  const [disclosuresOpen, setDisclosuresOpen] = useState(false);
+  const [paperTrade, setPaperTrade] = useState<any | null>(null);
+
+  const askSentinel = (query: string, focus: ResearchFocus = 'all') => {
+    setPendingQuery({ query, focus });
+    navigateTo(AppView.RESEARCH);
+  };
 
   // Auth state
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -133,7 +158,7 @@ const App: React.FC = () => {
         setLoading(false);
       } catch (err: any) {
         console.error(err);
-        setError('Failed to initialize ROSTR Trading Core. Please check server status.');
+        setError('We could not load market data. Please check your connection and try again.');
         setLoading(false);
       }
     };
@@ -158,12 +183,12 @@ const App: React.FC = () => {
         });
       }
       setExecutionBanner(
-        `ROSTR Harness Compiled (W = 1.00 · 11ms DAG): ${wizardConfig.philosophy} · ${wizardConfig.holdingHorizon} · ${wizardConfig.goalTarget} (+${wizardConfig.targetReturnPct}%). All 11 POP artifacts & 100 signals updated.`
+        `Research preferences saved: ${wizardConfig.philosophy} · ${wizardConfig.holdingHorizon}. Ideas have been refreshed.`
       );
       setTimeout(() => setExecutionBanner(null), 6500);
     } catch (e: any) {
       setExecutionBanner(
-        'Wizard update notice: ' + (e?.message || 'Unable to execute ROSTR harness.')
+        'Could not update preferences: ' + (e?.message || 'please try again.')
       );
       setTimeout(() => setExecutionBanner(null), 5000);
     } finally {
@@ -186,7 +211,7 @@ const App: React.FC = () => {
         palSession,
       });
       setExecutionBanner(
-        `Thesis compiled across ROSTR & PAL stages! Synthesized 11 POP artifacts & 100 fresh arbitrage signals.`
+        `Thesis analyzed. Research artifacts and ideas have been refreshed.`
       );
       setTimeout(() => setExecutionBanner(null), 5000);
     } catch (e: any) {
@@ -206,7 +231,7 @@ const App: React.FC = () => {
       const updated = await syncPlaidHoldings();
       setPlaidStatus(updated);
       setExecutionBanner(
-        'Plaid institutional ledger and DMA margin buying power synchronized in real time.'
+        'Portfolio balances refreshed.'
       );
       setTimeout(() => setExecutionBanner(null), 4000);
     } catch (e: any) {
@@ -221,21 +246,27 @@ const App: React.FC = () => {
     setPlaidStatus(updated);
   };
 
-  const handleExecuteTrade = (trade: any, scale: number = 1.8) => {
+  // No real orders are ever placed. "Trade" actions open a confirmation for a
+  // simulated (paper) position so users can track ideas without risking money.
+  const handleExecuteTrade = (trade: any, _scale?: number) => {
+    setPaperTrade(trade);
+  };
+
+  const confirmPaperTrade = () => {
+    if (!paperTrade) return;
     setExecutionBanner(
-      `ORDER ROUTED [W=1.00]: ${trade.action} ${trade.ticker} [${scale}x Scale · ${
-        trade.goalHorizonTag || '3-Day Profit'
-      }] across ${trade.primaryVenue} ⇄ ${trade.hedgeVenue}. Target: +${
-        trade.targetReturnPct || trade.arbitrageSpreadPct
-      }%.`
+      `Paper trade added: ${paperTrade.ticker}${
+        paperTrade.entryPrice ? ` at reference price $${Number(paperTrade.entryPrice).toFixed(2)}` : ''
+      }. Simulated only. No real order was placed.`
     );
-    setTimeout(() => setExecutionBanner(null), 6000);
+    setPaperTrade(null);
+    setTimeout(() => setExecutionBanner(null), 5000);
   };
 
   const handleSignOut = () => {
     signOutUser();
     setCurrentUser(null);
-    setExecutionBanner('Signed out of trading session.');
+    setExecutionBanner('You have been signed out.');
     setTimeout(() => setExecutionBanner(null), 3000);
   };
 
@@ -250,13 +281,13 @@ const App: React.FC = () => {
           <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4 font-bold text-xl">
             !
           </div>
-          <h1 className="text-xl font-bold mb-2 text-slate-900">System Initialization Notice</h1>
+          <h1 className="text-xl font-bold mb-2 text-slate-900">Something went wrong</h1>
           <p className="text-xs text-slate-600 mb-6">{error}</p>
           <button
             onClick={() => window.location.reload()}
             className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg transition-colors"
           >
-            Reconnect Terminal
+            Try again
           </button>
         </div>
       </div>
@@ -268,7 +299,7 @@ const App: React.FC = () => {
   const isSecondaryActive = SECONDARY_NAV_ITEMS.some((item) => item.id === view);
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-blue-100 selection:text-blue-900 flex flex-col">
+    <div className="min-h-screen bg-[#fafaf9] text-slate-900 font-sans selection:bg-blue-100 selection:text-blue-900 flex flex-col">
       {/* Responsive Top Navigation Bar */}
       <header className="border-b border-slate-200 bg-white/95 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3 lg:gap-6">
@@ -369,9 +400,9 @@ const App: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsWizardOpen(true)}
-              className="hidden sm:inline-flex items-center px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors whitespace-nowrap shadow-xs"
+              className="hidden sm:inline-flex items-center px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors whitespace-nowrap shadow-xs"
             >
-              ✦ Hypothesis Wizard
+              ✦ Strategy Wizard
             </button>
 
             {currentUser ? (
@@ -445,7 +476,7 @@ const App: React.FC = () => {
                 }}
                 className="w-full py-2.5 px-4 rounded-lg bg-blue-600 text-white text-xs font-bold text-center"
               >
-                ✦ Open Hypothesis, Philosophy &amp; Goals Wizard
+                ✦ Open Strategy Wizard
               </button>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
@@ -499,7 +530,7 @@ const App: React.FC = () => {
                     }}
                     className="w-full min-h-[44px] py-2.5 px-4 bg-slate-900 text-white rounded-lg text-sm font-semibold"
                   >
-                    Sign In / Institutional Access
+                    Sign in
                   </button>
                 )}
               </div>
@@ -510,8 +541,12 @@ const App: React.FC = () => {
 
       {/* Execution Feedback Notification */}
       {executionBanner && (
-        <div className="bg-blue-50 border-b border-blue-200 py-2.5 px-4 text-center text-xs font-mono font-medium text-blue-900 flex items-center justify-center gap-2 z-30">
-          {executionBanner}
+        <div className="fixed top-20 left-1/2 z-[70] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 sentinel-pop" role="status" aria-live="polite">
+          <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-sm text-slate-700 shadow-[0_16px_40px_-16px_rgba(15,23,42,0.35)] backdrop-blur">
+            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-600" />
+            <span className="flex-1">{executionBanner}</span>
+            <button onClick={() => setExecutionBanner(null)} aria-label="Dismiss" className="text-slate-400 hover:text-slate-700">✕</button>
+          </div>
         </div>
       )}
 
@@ -519,7 +554,7 @@ const App: React.FC = () => {
       <NewsTicker news={report.newsFeed} />
 
       {/* AIwork Framer Template Sentinel Landing Experience (Above Live Command Dashboard) */}
-      {view === AppView.DASHBOARD && (
+      {view === AppView.DASHBOARD && !currentUser && (
         <MarketingHero
           onLaunchTerminal={() => setIsWizardOpen(true)}
           onOpenAuth={() => setIsAuthModalOpen(true)}
@@ -545,10 +580,17 @@ const App: React.FC = () => {
             onSyncPlaid={handleSyncPlaid}
             onOpenWizard={() => setIsWizardOpen(true)}
             onNavigateTo100Trades={() => navigateTo(AppView.ARBITRAGE_100)}
-            onNavigateToPal={() => navigateTo(AppView.PAL_RUNTIME)}
             onNavigateToPlaid={() => navigateTo(AppView.PLAID_PORTFOLIO)}
-            onNavigateToSandbox={() => navigateTo(AppView.AGENT_SANDBOX)}
-            onExecuteTrade={(t) => handleExecuteTrade(t, t.positionScaleMultiple || 2.0)}
+            onAsk={askSentinel}
+            onPaperTrade={(t) => handleExecuteTrade(t)}
+            onOpenDisclosures={() => setDisclosuresOpen(true)}
+          />
+        )}
+        {view === AppView.RESEARCH && (
+          <ResearchView
+            research={research}
+            pendingQuery={pendingQuery}
+            onPendingConsumed={() => setPendingQuery(null)}
           />
         )}
         {view === AppView.ARBITRAGE_100 && (
@@ -608,8 +650,14 @@ const App: React.FC = () => {
         {view === AppView.ANALYSIS && <AnalysisView report={report} />}
       </main>
 
-      {/* Floating Tactical Bloomberg-Style Chat Assistant */}
-      <ChatAssistant report={report} />
+      {/* Floating research assistant (hidden on the full research page) */}
+      {view !== AppView.RESEARCH && (
+        <ChatAssistant research={research} onOpenFull={() => navigateTo(AppView.RESEARCH)} />
+      )}
+
+      <PaperTradeConfirm trade={paperTrade} onCancel={() => setPaperTrade(null)} onConfirm={confirmPaperTrade} />
+      <DisclosuresModal isOpen={disclosuresOpen} onClose={() => setDisclosuresOpen(false)} />
+      <RiskAcknowledgementGate onOpenDisclosures={() => setDisclosuresOpen(true)} />
 
       {/* 4-Step Hypothesis, Trading Philosophy & Goals Wizard Modal */}
       <HypothesisWizardModal
@@ -625,56 +673,34 @@ const App: React.FC = () => {
         onClose={() => setIsAuthModalOpen(false)}
         onAuthSuccess={(user) => {
           setCurrentUser(user);
-          setExecutionBanner(
-            `Authenticated as ${user.fullName} (${user.tier}). Session persisted to Supabase & local store.`
-          );
+          setExecutionBanner(`Welcome, ${user.fullName}. You're signed in.`);
           setTimeout(() => setExecutionBanner(null), 5000);
         }}
       />
 
-      {/* Responsive Footer */}
-      <footer className="border-t border-slate-200 bg-slate-50 text-xs text-slate-500 font-sans py-6 px-4 sm:px-6 mt-auto">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="font-bold text-slate-900">
-              Sentinel · Trading
-            </span>
-            <span aria-hidden="true">·</span>
-            <span className="font-semibold text-blue-700">Know. Believe. Buy.</span>
-            <span aria-hidden="true">·</span>
-            <span>Save your life. Invest your future. Research the present.</span>
+      {/* Footer with regulatory disclosures */}
+      <footer className="mt-auto border-t border-slate-200 bg-slate-50/80 px-4 py-8 text-xs text-slate-500 sm:px-6">
+        <div className="mx-auto max-w-7xl space-y-5">
+          <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-900 font-mono text-xs font-bold text-white">S</span>
+              <span className="text-sm font-semibold text-slate-900">Sentinel Trading</span>
+              <span className="text-slate-400">· Research the present. Plan your future.</span>
+            </div>
+            <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-5 gap-y-1">
+              <button type="button" onClick={() => navigateTo(AppView.DASHBOARD)} className="hover:text-slate-900">Overview</button>
+              <button type="button" onClick={() => navigateTo(AppView.RESEARCH)} className="hover:text-slate-900">Ask Sentinel</button>
+              <button type="button" onClick={() => navigateTo(AppView.BACKEND_QA)} className="hover:text-slate-900">Security</button>
+              <button type="button" onClick={() => setDisclosuresOpen(true)} className="font-medium text-slate-700 underline underline-offset-2 hover:text-slate-900">Disclosures</button>
+            </nav>
           </div>
-
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-500">
-            <button
-              type="button"
-              onClick={() => navigateTo(AppView.DASHBOARD)}
-              className="hover:text-slate-900 transition-colors"
-            >
-              Command Dashboard
-            </button>
-            <button
-              type="button"
-              onClick={() => navigateTo(AppView.PAL_RUNTIME)}
-              className="hover:text-slate-900 transition-colors"
-            >
-              ROSTR &amp; POP 11
-            </button>
-            <button
-              type="button"
-              onClick={() => navigateTo(AppView.AGENT_SANDBOX)}
-              className="hover:text-slate-900 transition-colors"
-            >
-              Sandbox &amp; Composio
-            </button>
-            <button
-              type="button"
-              onClick={() => navigateTo(AppView.BACKEND_QA)}
-              className="hover:text-slate-900 transition-colors"
-            >
-              Security &amp; QA
-            </button>
-          </div>
+          <p className="max-w-4xl leading-relaxed text-slate-500">
+            {SHORT_DISCLOSURE} Sentinel Trading is not a registered broker-dealer, investment adviser or commodity
+            trading advisor. AI-generated content may be inaccurate. Model scores, simulations and paper trades are
+            hypothetical and do not reflect actual trading; past or hypothetical performance does not guarantee future
+            results. Market data may be delayed or illustrative.
+          </p>
+          <p className="text-slate-400">© {new Date().getFullYear()} Sentinel Trading. All rights reserved.</p>
         </div>
       </footer>
     </div>

@@ -1,37 +1,23 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { MarketReport, TradeRecommendation, MacroMetric, PlaidStatus } from '../types';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
 import {
-  MarketReport,
-  TradeRecommendation,
-  MacroMetric,
-  PlaidStatus,
-  ChatMessage,
-} from '../types';
-import { queryReportAgent } from '../services/geminiService';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from 'recharts';
-import {
-  Sparkles,
-  FileText,
-  Zap,
-  Send,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
   RefreshCw,
-  ShieldCheck,
-  TrendingUp,
-  Layers,
-  MessageSquare,
-  Globe,
+  SlidersHorizontal,
+  Search,
+  Newspaper,
+  ShieldAlert,
   Wallet,
-  Target,
-  Clock,
-  Cpu,
+  Sparkles,
+  ChevronRight,
+  Info,
 } from 'lucide-react';
+import { ResearchFocus } from '../services/answerEngine';
+import { Composer } from './research/ResearchParts';
+import { DataModeBadge, InlineDisclaimer, SimulatedBadge } from './compliance/Compliance';
 
 interface DashboardProps {
   report: MarketReport;
@@ -39,151 +25,151 @@ interface DashboardProps {
   onSyncPlaid?: () => Promise<void>;
   onOpenWizard?: () => void;
   onNavigateTo100Trades?: () => void;
-  onNavigateToPal?: () => void;
   onNavigateToPlaid?: () => void;
-  onNavigateToSandbox?: () => void;
-  onExecuteTrade?: (trade: TradeRecommendation) => void;
+  onAsk: (query: string, focus: ResearchFocus) => void;
+  onPaperTrade?: (trade: TradeRecommendation) => void;
+  onOpenDisclosures?: () => void;
 }
 
-const MacroCard: React.FC<{ metric: MacroMetric }> = ({ metric }) => {
-  const isUp = metric.trend === 'UP';
+/* --------------------------------- Helpers -------------------------------- */
+
+const usd = (n: number, digits = 0) =>
+  n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: digits, minimumFractionDigits: digits });
+
+function marketSession(now = new Date()) {
+  const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const day = et.getDay();
+  const mins = et.getHours() * 60 + et.getMinutes();
+  if (day === 0 || day === 6) return { label: 'US markets closed', tone: 'slate' as const };
+  if (mins >= 570 && mins < 960) return { label: 'US markets open', tone: 'emerald' as const };
+  if (mins >= 240 && mins < 570) return { label: 'Pre-market', tone: 'amber' as const };
+  if (mins >= 960 && mins < 1200) return { label: 'After hours', tone: 'amber' as const };
+  return { label: 'US markets closed', tone: 'slate' as const };
+}
+
+function greeting() {
+  const h = new Date().getHours();
+  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+}
+
+const instrumentOf = (t: TradeRecommendation) => {
+  if (t.marketCategory === 'Prediction Markets') return 'Event contract';
+  if (t.marketCategory === 'Commodities') return t.action === 'CALL' || t.action === 'PUT' ? 'Futures option' : 'Commodity';
+  if (t.marketCategory === 'Crypto Basis') return 'Digital asset';
+  if (t.action === 'CALL' || t.action === 'PUT') return 'Option';
+  return 'Stock';
+};
+
+const riskOf = (t: TradeRecommendation): 'High' | 'Elevated' | 'Moderate' => {
+  const inst = instrumentOf(t);
+  if (inst === 'Option' || inst === 'Futures option' || inst === 'Event contract') return 'High';
+  if (inst === 'Digital asset' || inst === 'Commodity') return 'Elevated';
+  return 'Moderate';
+};
+
+const RISK_STYLE = {
+  High: 'bg-rose-50 text-rose-700 border-rose-200',
+  Elevated: 'bg-amber-50 text-amber-800 border-amber-200',
+  Moderate: 'bg-slate-50 text-slate-600 border-slate-200',
+};
+
+const Card: React.FC<{ className?: string; children: React.ReactNode }> = ({ className = '', children }) => (
+  <section className={`rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${className}`}>
+    {children}
+  </section>
+);
+
+const CardHeader: React.FC<{
+  icon?: React.ElementType;
+  title: string;
+  subtitle?: string;
+  action?: React.ReactNode;
+}> = ({ icon: Icon, title, subtitle, action }) => (
+  <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+    <div className="min-w-0">
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+        {Icon && <Icon className="w-4 h-4 text-slate-400" />}
+        {title}
+      </h3>
+      {subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}
+    </div>
+    {action}
+  </div>
+);
+
+/* ------------------------------- Sub-blocks ------------------------------- */
+
+const MetricTile: React.FC<{ metric: MacroMetric }> = ({ metric }) => {
+  const Trend = metric.trend === 'UP' ? ArrowUpRight : metric.trend === 'DOWN' ? ArrowDownRight : Minus;
+  const tone =
+    metric.trend === 'UP' ? 'text-emerald-600 bg-emerald-50' : metric.trend === 'DOWN' ? 'text-rose-600 bg-rose-50' : 'text-slate-500 bg-slate-100';
   return (
-    <div className="bg-white border border-slate-200 p-4 rounded-xl flex flex-col justify-between shadow-xs hover:border-slate-300 transition-colors">
-      <div className="text-[11px] text-slate-500 uppercase font-mono font-medium tracking-wider">
-        {metric.name}
+    <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-slate-300">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-xs font-medium text-slate-500">{metric.name}</span>
+        <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${tone}`} aria-label={`Trend ${metric.trend.toLowerCase()}`}>
+          <Trend className="w-3.5 h-3.5" />
+        </span>
       </div>
-      <div className="text-xl font-mono text-slate-900 font-bold my-1 tracking-tight">
-        {metric.value}
+      <div className="mt-2 text-xl font-semibold tracking-tight text-slate-900 tabular-nums">{metric.value}</div>
+    </div>
+  );
+};
+
+const SentimentGauge: React.FC<{ score: number }> = ({ score }) => {
+  const s = Math.max(0, Math.min(100, score || 50));
+  const angle = Math.PI * (1 - s / 100);
+  const x = 60 + 46 * Math.cos(angle);
+  const y = 60 - 46 * Math.sin(angle);
+  const label = s >= 65 ? 'Optimistic' : s >= 55 ? 'Leaning positive' : s > 45 ? 'Neutral' : s > 35 ? 'Leaning cautious' : 'Fearful';
+  return (
+    <div className="flex flex-col items-center">
+      <svg viewBox="0 0 120 70" className="w-44" role="img" aria-label={`Sentiment score ${s} out of 100, ${label}`}>
+        <defs>
+          <linearGradient id="gauge" x1="0" x2="1">
+            <stop offset="0%" stopColor="#f43f5e" />
+            <stop offset="50%" stopColor="#cbd5e1" />
+            <stop offset="100%" stopColor="#10b981" />
+          </linearGradient>
+        </defs>
+        <path d="M14 60 A46 46 0 0 1 106 60" fill="none" stroke="url(#gauge)" strokeWidth="9" strokeLinecap="round" />
+        <circle cx={x} cy={y} r="6.5" fill="#fff" stroke="#0f172a" strokeWidth="3" />
+      </svg>
+      <div className="-mt-3 text-3xl font-semibold tracking-tight text-slate-900 tabular-nums">{s}</div>
+      <div className="text-xs font-medium text-slate-500">{label}</div>
+    </div>
+  );
+};
+
+const BreakdownBar: React.FC<{ label: string; value: number; signed?: boolean }> = ({ label, value, signed }) => {
+  const pct = signed ? Math.min(100, Math.abs(value)) : Math.max(0, Math.min(100, value));
+  const negative = signed && value < 0;
+  return (
+    <div>
+      <div className="flex justify-between text-xs">
+        <span className="text-slate-600">{label}</span>
+        <span className={`font-medium tabular-nums ${negative ? 'text-rose-600' : 'text-slate-900'}`}>
+          {signed && value > 0 ? '+' : ''}
+          {value}
+        </span>
       </div>
-      <div
-        className={`text-xs flex items-center gap-1 font-mono font-medium ${
-          isUp
-            ? 'text-emerald-600'
-            : metric.trend === 'DOWN'
-            ? 'text-red-600'
-            : 'text-slate-500'
-        }`}
-      >
-        <span>{isUp ? '▲' : metric.trend === 'DOWN' ? '▼' : '—'}</span>
-        <span>{metric.trend}</span>
+      <div className="mt-1.5 h-1.5 rounded-full bg-slate-100">
+        <div className={`h-1.5 rounded-full ${negative ? 'bg-rose-400' : 'bg-slate-800'}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
 };
 
-const TradeCard: React.FC<{
-  trade: TradeRecommendation;
-  onExecute?: (trade: TradeRecommendation) => void;
-}> = ({ trade, onExecute }) => {
-  const isBuy = trade.action === 'BUY' || trade.action === 'CALL';
-  const isCritical = trade.oneMustActUrgency === 'CRITICAL_IMMEDIATE';
+/* --------------------------------- Main ---------------------------------- */
 
-  return (
-    <div
-      className={`p-4 sm:p-5 rounded-xl border bg-white flex flex-col justify-between transition-all hover:border-slate-400 shadow-xs ${
-        isCritical
-          ? 'border-blue-300 ring-1 ring-blue-100 bg-blue-50/10'
-          : 'border-slate-200'
-      }`}
-    >
-      <div>
-        <div className="flex justify-between items-start gap-2 mb-2">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <h4 className="text-lg font-bold text-slate-900 tracking-tight font-mono">
-                {trade.ticker}
-              </h4>
-              <span
-                className={`text-[10px] font-bold px-2 py-0.5 rounded font-mono ${
-                  isBuy
-                    ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
-                    : 'text-red-700 bg-red-50 border border-red-200'
-                }`}
-              >
-                {trade.action}
-              </span>
-              {trade.goalHorizonTag && (
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-900 text-white">
-                  {trade.goalHorizonTag}
-                </span>
-              )}
-              {trade.targetReturnPct && (
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  +{trade.targetReturnPct}% Target
-                </span>
-              )}
-            </div>
-            <div className="text-xs font-semibold text-slate-700 truncate mt-1">
-              {trade.name}
-            </div>
-          </div>
-
-          <div className="text-right shrink-0">
-            <div className="text-blue-600 font-mono font-bold text-sm">
-              ${trade.entryPrice?.toFixed(2) ?? 'MKT'}
-            </div>
-            {trade.arbitrageSpreadPct && (
-              <div className="text-[10px] font-mono font-bold text-emerald-700">
-                +{trade.arbitrageSpreadPct}% Spread
-              </div>
-            )}
-          </div>
-        </div>
-
-        {trade.predictionOddsSpread && (
-          <div className="mb-2 px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] font-mono text-amber-950 font-semibold">
-            🎲 {trade.predictionOddsSpread}
-          </div>
-        )}
-
-        {trade.commoditySecondOrderImpact && !trade.predictionOddsSpread && (
-          <div className="mb-2 px-2.5 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-[11px] font-mono text-blue-950 font-semibold">
-            ⛓️ {trade.commoditySecondOrderImpact}
-          </div>
-        )}
-
-        <p className="text-xs text-slate-600 leading-relaxed mb-3 line-clamp-3">
-          {trade.reasoning}
-        </p>
-
-        {trade.primaryVenue && trade.hedgeVenue && (
-          <div className="text-[11px] font-mono text-slate-600 bg-slate-50 p-2 rounded border border-slate-200 mb-3">
-            <div className="flex justify-between">
-              <span className="text-slate-400">Primary:</span>
-              <span className="text-slate-800 font-medium">{trade.primaryVenue}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Hedge:</span>
-              <span className="text-slate-800 font-medium">{trade.hedgeVenue}</span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-[11px] font-mono">
-          <span className="text-slate-500">
-            Conf: <strong className="text-slate-900">{trade.confidence}%</strong>
-          </span>
-          {trade.positionScaleMultiple && (
-            <span className="text-emerald-700 font-bold">
-              Scale {trade.positionScaleMultiple}x
-            </span>
-          )}
-        </div>
-        {onExecute && (
-          <button
-            type="button"
-            onClick={() => onExecute(trade)}
-            className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-mono font-bold transition-colors shadow-xs"
-          >
-            ACT NOW →
-          </button>
-        )}
-      </div>
-    </div>
-  );
-};
+const IDEA_FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'Equities', label: 'Stocks' },
+  { id: 'Options', label: 'Options' },
+  { id: 'Commodities', label: 'Commodities' },
+  { id: 'Prediction Markets', label: 'Event contracts' },
+  { id: 'Crypto Basis', label: 'Digital assets' },
+];
 
 export const Dashboard: React.FC<DashboardProps> = ({
   report,
@@ -191,567 +177,418 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onSyncPlaid,
   onOpenWizard,
   onNavigateTo100Trades,
-  onNavigateToPal,
   onNavigateToPlaid,
-  onNavigateToSandbox,
-  onExecuteTrade,
+  onAsk,
+  onPaperTrade,
+  onOpenDisclosures,
 }) => {
-  const [selectedFilter, setSelectedFilter] = useState<string>('ALL');
-  const [isSyncingPlaid, setIsSyncingPlaid] = useState(false);
+  const [filter, setFilter] = useState('all');
+  const [focus, setFocus] = useState<ResearchFocus>('all');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const session = marketSession();
 
-  // Embedded Co-Pilot Chat State
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      id: 'dash-welcome',
-      role: 'model',
-      text: `[ROSTR Co-Pilot · W=1.00 · 11ms DAG] Ready. Active Hypothesis: "${
-        report.wizardConfig?.hypothesisPrompt?.slice(0, 95) ||
-        'Pepsi beverage rollout -> CME Aluminum (ALI=F) & Alcoa (AA) calls + Polymarket/Kalshi odds spread'
-      }...". Ask me to analyze any commodity ripple, prediction market spread, or Plaid DMA sizing.`,
-      timestamp: new Date(),
-    },
-  ]);
-  const [chatInput, setChatInput] = useState('');
-  const [isChatLoading, setIsChatLoading] = useState(false);
+  const ideas = useMemo(() => {
+    const list = (report.recommendations || []).filter((t) => filter === 'all' || t.marketCategory === filter);
+    return [...list].sort((a, b) => b.confidence - a.confidence).slice(0, 8);
+  }, [report.recommendations, filter]);
 
-  const wizard = report.wizardConfig;
-  const rostr = report.rostrRun;
+  const holdings = plaidStatus?.holdings || [];
+  const totalValue = plaidStatus?.accounts?.reduce((a, x) => a + (x.currentBalance || 0), 0) || 0;
+  const totalCash = plaidStatus?.accounts?.reduce((a, x) => a + (x.availableBalance || 0), 0) || 0;
+  const totalPnL = holdings.reduce((a, h) => a + (h.unrealizedPnL || 0), 0);
+  const simulated = !plaidStatus || plaidStatus.mockMode;
 
-  const filteredRecommendations = (report.recommendations || []).filter((t) => {
-    if (selectedFilter === 'ALL') return true;
-    if (selectedFilter === 'Prediction Markets' || selectedFilter === 'Commodities') {
-      return t.marketCategory === selectedFilter;
-    }
-    return t.goalHorizonTag === selectedFilter;
-  });
-
-  const handleQuickChat = async (promptText: string) => {
-    if (!promptText.trim() || isChatLoading) return;
-    const userMsg: ChatMessage = {
-      id: 'u-' + Date.now(),
-      role: 'user',
-      text: promptText,
-      timestamp: new Date(),
-    };
-    const nextHist = [...chatMessages, userMsg];
-    setChatMessages(nextHist);
-    setChatInput('');
-    setIsChatLoading(true);
-    try {
-      const reply = await queryReportAgent(report, nextHist, promptText);
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: 'm-' + Date.now(),
-          role: 'model',
-          text: reply,
-          timestamp: new Date(),
-        },
-      ]);
-    } finally {
-      setIsChatLoading(false);
-    }
-  };
-
-  const handlePlaidSyncClick = async () => {
+  const sync = async () => {
     if (!onSyncPlaid) return;
-    setIsSyncingPlaid(true);
+    setIsSyncing(true);
     try {
       await onSyncPlaid();
     } finally {
-      setIsSyncingPlaid(false);
+      setIsSyncing(false);
     }
   };
 
-  const totalPlaidBalance =
-    plaidStatus?.accounts?.reduce((acc, a) => acc + (a.currentBalance || 0), 0) ||
-    19800000;
-  const totalBuyingPower =
-    plaidStatus?.accounts?.reduce((acc, a) => acc + (a.availableBalance || 0), 0) ||
-    15550000;
+  const research = (t: TradeRecommendation) =>
+    onAsk(
+      `Give me a balanced research overview of ${t.name} (${t.ticker}): what drives it, the bull case, the bear case, and the key risks of a ${instrumentOf(t).toLowerCase()} position.`,
+      t.marketCategory === 'Commodities' ? 'commodities' : 'equities'
+    );
+
+  const sessionTone = {
+    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    amber: 'bg-amber-50 text-amber-800 border-amber-200',
+    slate: 'bg-slate-100 text-slate-600 border-slate-200',
+  }[session.tone];
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* 1. ROSTR ACTIVE HYPOTHESIS, PHILOSOPHY & GOALS COMMAND BAR */}
-      <div className="bg-slate-900 text-white rounded-2xl p-5 sm:p-6 shadow-md border border-slate-800">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div className="space-y-2 min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-400/30 text-[11px] font-mono font-bold">
-                ROSTR AGENT HARNESS · W = {rostr?.wholeness?.guidedScoreW?.toFixed(2) || '1.00'}
-              </span>
-              <span className="px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[11px] font-mono font-bold">
-                HORIZON: {wizard?.holdingHorizon || '3-Day Profit'} · GOAL: +
-                {wizard?.targetReturnPct || 10.4}%
-              </span>
-              <span className="px-2.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-400/30 text-[11px] font-mono font-bold">
-                PHILOSOPHY: {wizard?.philosophy || 'Second-Order Commodity Ripples'}
-              </span>
-              <span className="px-2.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-400/30 text-[11px] font-mono font-bold">
-                DAG WAVE: {rostr?.dagCompression?.compressedTotalMs || 11}ms (2.94x)
-              </span>
-            </div>
-
-            <h2 className="text-lg sm:text-xl font-extrabold tracking-tight text-white">
-              Active Hypothesis: &ldquo;
-              {wizard?.hypothesisPrompt ||
-                'High Pepsi canned beverage rollout -> CME Aluminum (ALI=F) & Alcoa (AA) calls + Polymarket/Kalshi event spread'}
-              &rdquo;
-            </h2>
+    <div className="space-y-6 pb-16">
+      {/* 1. Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sentinel-fade-in">
+        <div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-medium ${sessionTone}`}>
+              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+              {session.label}
+            </span>
+            <DataModeBadge mode={report.aiMode} />
+            <span className="text-slate-400">Updated {report.lastUpdated}</span>
           </div>
-
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-            {onOpenWizard && (
-              <button
-                type="button"
-                onClick={onOpenWizard}
-                className="inline-flex items-center px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-sm transition-colors"
-              >
-                <Sparkles className="w-4 h-4 mr-1.5" />
-                Hypothesis &amp; Goals Wizard
-              </button>
-            )}
-            {onNavigateToPal && (
-              <button
-                type="button"
-                onClick={onNavigateToPal}
-                className="inline-flex items-center px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/15 text-xs font-bold transition-colors"
-              >
-                <FileText className="w-4 h-4 mr-1.5" />
-                11 POP Artifacts (.MD)
-              </button>
-            )}
-            {onNavigateToSandbox && (
-              <button
-                type="button"
-                onClick={onNavigateToSandbox}
-                className="inline-flex items-center px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/15 text-xs font-bold transition-colors"
-              >
-                <Cpu className="w-4 h-4 mr-1.5" />
-                Sandbox &amp; Composio
-              </button>
-            )}
-          </div>
+          <h1 className="mt-2 text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">{greeting()}</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} · Here's your market
+            overview.
+          </p>
         </div>
+        {onOpenWizard && (
+          <button
+            type="button"
+            onClick={onOpenWizard}
+            className="inline-flex items-center gap-2 self-start rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-xs hover:border-slate-300 hover:bg-slate-50 sm:self-auto"
+          >
+            <SlidersHorizontal className="w-4 h-4" /> Research preferences
+          </button>
+        )}
       </div>
 
-      {/* 2. MACRO METRICS STRIP */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {(report.macroMetrics || []).map((m, i) => (
-          <MacroCard key={i} metric={m} />
-        ))}
-      </div>
-
-      {/* 3. TAILORED ARBITRAGE & PREDICTION MARKET SIGNALS WITH HORIZON FILTER */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200 pb-4">
-          <div>
-            <h3 className="text-base sm:text-lg font-extrabold text-slate-900 flex items-center gap-2">
-              <Zap className="w-5 h-5 text-blue-600" />
-              One-Must-Act Arbitrage, Commodity Ripple &amp; Prediction Market Signals
-            </h3>
-            <p className="text-xs text-slate-500">
-              Filtered by your trading philosophy, holding horizon (3-Day Profit, Weekly, Monthly, Quarterly, 1-Year Hold), and +10% target.
-            </p>
+      {/* 2. Ask bar */}
+      <Card className="relative overflow-hidden p-5 sm:p-6">
+        <div aria-hidden="true" className="pointer-events-none absolute -top-24 right-0 h-56 w-96 rounded-full bg-blue-100/60 blur-3xl" />
+        <div className="relative">
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <Sparkles className="w-4 h-4 text-blue-600" /> Ask Sentinel
           </div>
-
-          {onNavigateTo100Trades && (
-            <button
-              type="button"
-              onClick={onNavigateTo100Trades}
-              className="text-xs font-mono font-bold text-blue-600 hover:text-blue-800 shrink-0"
-            >
-              OPEN FULL 100-TRADE MATRIX →
-            </button>
-          )}
-        </div>
-
-        {/* Horizon & Market Filter Tabs */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          {[
-            { id: 'ALL', label: 'All Signals (100)' },
-            { id: '3-Day Profit', label: '⚡ 3-Day Profit (+10%)' },
-            { id: 'Weekly', label: '📅 Weekly Cycle' },
-            { id: 'Monthly', label: '🗓️ Monthly Swing' },
-            { id: 'Quarterly', label: '📈 Quarterly Macro' },
-            { id: 'Hold 1 Year', label: '🏛️ Hold 1 Year (10x)' },
-            { id: 'Prediction Markets', label: '🎲 Prediction & Betting Markets' },
-            { id: 'Commodities', label: '⛓️ Second-Order Commodities' },
-          ].map((tab) => {
-            const active = selectedFilter === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setSelectedFilter(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  active
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredRecommendations.slice(0, 6).map((trade, idx) => (
-            <TradeCard key={idx} trade={trade} onExecute={onExecuteTrade} />
-          ))}
-        </div>
-      </div>
-
-      {/* 4. UNIFIED COCKPIT: EMBEDDED CHAT CO-PILOT + DEEP RESEARCH & SECOND-ORDER RIPPLES */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left 5 Cols: Embedded Live ROSTR Chat Co-Pilot */}
-        <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between space-y-4">
-          <div>
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-              <div className="flex items-center space-x-2">
-                <MessageSquare className="w-4 h-4 text-blue-600" />
-                <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-900">
-                  Live ROSTR Quant Co-Pilot Chat
-                </h3>
-              </div>
-              <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-mono font-bold">
-                11ms DAG Grounded
-              </span>
-            </div>
-
-            {/* Quick Prompt Buttons */}
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {[
-                'Pepsi Aluminum 3-Day +10% setup',
-                'Polymarket vs Kalshi odds spread',
-                'AI Chips CoWoS TSMC/NVDA arb',
-                'Explain my Plaid DMA holdings',
-              ].map((q) => (
+          <Composer
+            focus={focus}
+            onFocusChange={setFocus}
+            onSubmit={onAsk}
+            placeholder="Ask about a stock, sector, commodity or economic trend…"
+          />
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {['What moved markets today?', 'Explain the current yield curve', 'Risks in semiconductor stocks', 'How do aluminum futures work?'].map(
+              (q) => (
                 <button
                   key={q}
                   type="button"
-                  onClick={() => handleQuickChat(q)}
-                  className="px-2.5 py-1 rounded-md bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 text-[11px] font-medium border border-slate-200 transition-colors"
+                  onClick={() => onAsk(q, 'all')}
+                  className="rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900"
                 >
                   {q}
                 </button>
-              ))}
-            </div>
-
-            {/* Chat Message Transcript */}
-            <div className="mt-3 space-y-2.5 max-h-72 overflow-y-auto pr-1">
-              {chatMessages.map((m) => (
-                <div
-                  key={m.id}
-                  className={`p-3 rounded-xl text-xs leading-relaxed ${
-                    m.role === 'user'
-                      ? 'bg-blue-600 text-white ml-6'
-                      : 'bg-slate-50 border border-slate-200 text-slate-800 mr-2 font-mono'
-                  }`}
-                >
-                  {m.text}
-                </div>
-              ))}
-              {isChatLoading && (
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono text-slate-500">
-                  Executing ROSTR Middle-Out DAG Wave query...
-                </div>
-              )}
-            </div>
-          </div>
-
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void handleQuickChat(chatInput);
-            }}
-            className="flex items-center gap-2 pt-2 border-t border-slate-100"
-          >
-            <input
-              type="text"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              placeholder="Ask about hypotheses, commodities, prediction odds..."
-              className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:border-blue-600 focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={isChatLoading}
-              className="inline-flex items-center px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-blue-600 text-white text-xs font-bold transition-colors"
-            >
-              <Send className="w-3.5 h-3.5" />
-            </button>
-          </form>
-        </div>
-
-        {/* Right 7 Cols: Deep Research & Second-Order Commodity / Prediction Ripple Chains */}
-        <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-            <div>
-              <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-900">
-                Deep Research: Second-Order Commodity &amp; Prediction Market Ripple Chains
-              </h3>
-              <p className="text-xs text-slate-500">
-                How primary catalysts propagate into CME commodity futures, options skew, and event contracts.
-              </p>
-            </div>
-            <span className="px-2.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-xs font-mono font-bold">
-              Wave-2 Parallel Scout
-            </span>
-          </div>
-
-          <div className="space-y-3">
-            {(report.secondOrderChains || []).map((chain, idx) => (
-              <div
-                key={idx}
-                className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-white transition-colors space-y-1.5"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-bold text-slate-900">
-                    {chain.primaryEvent}
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-mono text-[10px] font-bold">
-                    {chain.expectedSpreadExpansion} · {chain.confidence}% Conf
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600">{chain.derivedHypothesis}</p>
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] font-mono">
-                  <span className="text-slate-700">
-                    <strong>Impacted:</strong> {chain.impactedCommodity}
-                  </span>
-                  <span className="text-blue-700 font-bold">
-                    Action: {chain.recommendedContract}
-                  </span>
-                </div>
-              </div>
-            ))}
+              )
+            )}
           </div>
         </div>
+      </Card>
+
+      {/* 3. Market metrics */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {(report.macroMetrics || []).map((m) => (
+          <MetricTile key={m.name} metric={m} />
+        ))}
       </div>
 
-      {/* 5. PLAID HOLDINGS & BUYING POWER + LIVE NEWS & OMNICHANNEL DATA WIRE */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left 6 Cols: Plaid Institutional Holdings & Buying Power */}
-        <div className="lg:col-span-6 bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
-            <div>
-              <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-900 flex items-center">
-                <Wallet className="w-4 h-4 mr-1.5 text-emerald-600" />
-                Plaid Prime Brokerage Holdings &amp; DMA Buying Power
-              </h3>
-              <p className="text-xs text-slate-500">
-                {plaidStatus?.institution || 'Morgan Stanley Institutional & Apex Clearing'}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {onSyncPlaid && (
-                <button
-                  type="button"
-                  onClick={handlePlaidSyncClick}
-                  disabled={isSyncingPlaid}
-                  className="inline-flex items-center px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700"
-                >
-                  <RefreshCw
-                    className={`w-3.5 h-3.5 mr-1 ${isSyncingPlaid ? 'animate-spin' : ''}`}
-                  />
-                  Sync
+      {/* 4. Ideas + Sentiment */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <Card className="lg:col-span-8 overflow-hidden">
+          <CardHeader
+            icon={Search}
+            title="Research ideas"
+            subtitle="AI-generated ideas to investigate further. Not recommendations."
+            action={
+              onNavigateTo100Trades && (
+                <button onClick={onNavigateTo100Trades} className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium text-blue-700 hover:text-blue-900">
+                  View all <ChevronRight className="w-3.5 h-3.5" />
                 </button>
-              )}
-              {onNavigateToPlaid && (
-                <button
-                  type="button"
-                  onClick={onNavigateToPlaid}
-                  className="px-2.5 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800"
-                >
-                  Full Ledger →
-                </button>
-              )}
-            </div>
+              )
+            }
+          />
+          <div className="flex gap-1 overflow-x-auto px-5 pb-3" role="tablist" aria-label="Filter ideas by asset class">
+            {IDEA_FILTERS.map((f) => (
+              <button
+                key={f.id}
+                role="tab"
+                aria-selected={filter === f.id}
+                onClick={() => setFilter(f.id)}
+                className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  filter === f.id ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-              <div className="text-[10px] font-mono uppercase text-slate-500">
-                Total Portfolio Equity
-              </div>
-              <div className="text-lg font-extrabold font-mono text-slate-900 mt-0.5">
-                ${totalPlaidBalance.toLocaleString()}
-              </div>
-            </div>
-            <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200">
-              <div className="text-[10px] font-mono uppercase text-emerald-700">
-                Available DMA Buying Power
-              </div>
-              <div className="text-lg font-extrabold font-mono text-emerald-800 mt-0.5">
-                ${totalBuyingPower.toLocaleString()}
-              </div>
-            </div>
-          </div>
-
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full min-w-[640px] text-left text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-[10px] font-mono uppercase text-slate-400">
-                  <th className="py-2">Ticker</th>
-                  <th className="py-2">Position</th>
-                  <th className="py-2 text-right">Mark Price</th>
-                  <th className="py-2 text-right">Market Value</th>
-                  <th className="py-2 text-right">Unrealized P&amp;L</th>
+                <tr className="border-y border-slate-100 bg-slate-50/60 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                  <th className="py-2.5 pl-5 pr-3 font-medium">Asset</th>
+                  <th className="px-3 py-2.5 font-medium">View</th>
+                  <th className="px-3 py-2.5 font-medium">
+                    <span className="inline-flex items-center gap-1" title="How strongly the model's inputs agree. Not a probability of profit.">
+                      Model score <Info className="w-3 h-3" />
+                    </span>
+                  </th>
+                  <th className="px-3 py-2.5 font-medium">Risk</th>
+                  <th className="py-2.5 pl-3 pr-5 text-right font-medium">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-mono">
-                {(plaidStatus?.holdings || []).map((h) => (
-                  <tr key={h.securityId} className="hover:bg-slate-50">
-                    <td className="py-2 font-bold text-slate-900">{h.ticker}</td>
-                    <td className="py-2 font-sans text-slate-600 truncate max-w-[140px]">
-                      {h.name}
-                    </td>
-                    <td className="py-2 text-right text-slate-800">
-                      ${h.closePrice.toFixed(2)}
-                    </td>
-                    <td className="py-2 text-right font-semibold text-slate-900">
-                      ${h.currentValue.toLocaleString()}
-                    </td>
-                    <td
-                      className={`py-2 text-right font-bold ${
-                        h.unrealizedPnLPct >= 0 ? 'text-emerald-600' : 'text-red-600'
-                      }`}
-                    >
-                      +{h.unrealizedPnLPct}%
+              <tbody className="divide-y divide-slate-100">
+                {ideas.map((t, i) => {
+                  const bullish = t.action === 'BUY' || t.action === 'CALL';
+                  const risk = riskOf(t);
+                  return (
+                    <tr key={`${t.ticker}-${i}`} className="group transition-colors hover:bg-slate-50/70">
+                      <td className="py-3 pl-5 pr-3">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 font-mono text-[10px] font-semibold text-slate-700">
+                            {t.ticker.replace(/[^A-Z0-9]/gi, '').slice(0, 4)}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="font-semibold text-slate-900">{t.ticker}</div>
+                            <div className="max-w-[220px] truncate text-xs text-slate-500" title={t.name}>
+                              {t.name} · {instrumentOf(t)}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${
+                            bullish ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                          }`}
+                        >
+                          {bullish ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                          {bullish ? 'Bullish' : 'Bearish'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 w-16 rounded-full bg-slate-100">
+                            <div className="h-1.5 rounded-full bg-slate-800" style={{ width: `${t.confidence}%` }} />
+                          </div>
+                          <span className="text-xs tabular-nums text-slate-600">{t.confidence}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-medium ${RISK_STYLE[risk]}`}>{risk}</span>
+                      </td>
+                      <td className="py-3 pl-3 pr-5">
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            onClick={() => research(t)}
+                            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                          >
+                            Research
+                          </button>
+                          {onPaperTrade && (
+                            <button
+                              onClick={() => onPaperTrade(t)}
+                              className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                              title="Track this idea in a simulated portfolio"
+                            >
+                              Paper trade
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {ideas.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-5 py-10 text-center text-sm text-slate-500">
+                      No ideas in this category yet.
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
-        </div>
+          <div className="border-t border-slate-100 px-5 py-3">
+            <InlineDisclaimer text="Ideas and model scores are hypothetical, generated by AI from sample and public data, and may be wrong. They are not a forecast of returns or a recommendation to trade." />
+          </div>
+        </Card>
 
-        {/* Right 6 Cols: Live News & Omnichannel Firehose Nodes */}
-        <div className="lg:col-span-6 bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-            <div>
-              <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-900 flex items-center">
-                <Globe className="w-4 h-4 mr-1.5 text-blue-600" />
-                Live News &amp; 7-Stream Omnichannel Data Wire
-              </h3>
-              <p className="text-xs text-slate-500">
-                Polymarket/Kalshi CLOB, X Firehose, Reddit WSB, Google Trends, SEC EDGAR &amp; Reuters
-              </p>
+        <Card className="lg:col-span-4">
+          <CardHeader title="Market sentiment" subtitle="Blend of news, social and policy signals" />
+          <div className="px-5 pb-5">
+            <SentimentGauge score={report.overallSentimentScore} />
+            <div className="mt-5 space-y-3">
+              <BreakdownBar label="News tone" value={report.sentimentBreakdown?.newsSentiment ?? 50} />
+              <BreakdownBar label="Social chatter" value={report.sentimentBreakdown?.socialSentiment ?? 50} />
+              <BreakdownBar label="Policy impact" value={report.sentimentBreakdown?.politicalImpact ?? 0} signed />
+              <BreakdownBar label="Volatility" value={report.sentimentBreakdown?.volatility ?? 30} />
             </div>
-            <span className="px-2.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-mono font-bold">
-              7 FEEDS ONLINE
-            </span>
+            <button
+              onClick={() => onAsk('What is driving overall market sentiment right now, and what could change it?', 'macro')}
+              className="mt-5 flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-50 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-blue-600" /> Explain sentiment
+            </button>
           </div>
-
-          <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
-            {(report.omnichannelNodes || []).map((node) => (
-              <div
-                key={node.id}
-                className="p-3 rounded-xl border border-slate-200 bg-slate-50 flex items-start justify-between gap-3"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-900">
-                      {node.channel}
-                    </span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">
-                      Velocity {node.velocityScore}/100
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-1">{node.sampleSignal}</p>
-                </div>
-                <span className="text-[10px] font-mono text-slate-400 shrink-0">
-                  {node.lastPing}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className="pt-2 border-t border-slate-100 space-y-2">
-            <div className="text-[10px] font-mono uppercase text-slate-400 font-bold">
-              Breaking Financial &amp; Commodity Wire
-            </div>
-            {(report.newsFeed || []).slice(0, 3).map((n, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between text-xs py-1 border-b border-slate-100 last:border-0"
-              >
-                <span className="font-medium text-slate-800 truncate pr-2">
-                  {n.headline}
-                </span>
-                <span className="text-[10px] font-mono text-slate-500 shrink-0">
-                  {n.source} · {n.publishedAt}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        </Card>
       </div>
 
-      {/* 6. SECTOR ROTATION & GEOPOLITICAL RISK FOOTER */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
-          <h3 className="text-xs font-mono uppercase tracking-wider text-slate-500 font-bold mb-4">
-            Sector Rotation &amp; Materials Performance (%)
-          </h3>
-          <div className="h-52 w-full">
+      {/* 5. Sectors + News */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <Card className="lg:col-span-7">
+          <CardHeader title="Sector performance" subtitle="Change over the session (%)" />
+          <div className="h-60 px-3 pb-4">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={report.sectorPerformance || []}
-                layout="vertical"
-                margin={{ left: 20, right: 20 }}
-              >
-                <XAxis type="number" stroke="#64748b" fontSize={11} />
-                <YAxis
-                  dataKey="sector"
-                  type="category"
-                  stroke="#0f172a"
-                  width={120}
-                  tick={{ fontSize: 11, fontWeight: 600 }}
-                />
+              <BarChart data={report.sectorPerformance || []} layout="vertical" margin={{ left: 8, right: 24, top: 4, bottom: 4 }}>
+                <XAxis type="number" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
+                <YAxis dataKey="sector" type="category" width={130} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#334155' }} />
+                <ReferenceLine x={0} stroke="#e2e8f0" />
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#ffffff',
-                    borderColor: '#e2e8f0',
-                    color: '#0f172a',
-                    borderRadius: '8px',
-                  }}
+                  cursor={{ fill: '#f8fafc' }}
+                  formatter={(v: any) => [`${v}%`, 'Change']}
+                  contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 8px 24px -12px rgba(15,23,42,.2)', fontSize: 12 }}
                 />
-                <Bar dataKey="performance" radius={[0, 4, 4, 0]} barSize={20}>
-                  {(report.sectorPerformance || []).map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={entry.performance >= 0 ? '#059669' : '#dc2626'}
-                    />
+                <Bar dataKey="performance" radius={[0, 6, 6, 0]} barSize={18}>
+                  {(report.sectorPerformance || []).map((e, i) => (
+                    <Cell key={i} fill={e.performance >= 0 ? '#10b981' : '#f43f5e'} />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </Card>
 
-        <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs space-y-3">
-          <h3 className="text-xs font-mono uppercase tracking-wider text-slate-500 font-bold">
-            Macro, Commodity &amp; Prediction Market Structural Risks
-          </h3>
-          {(report.politicalRisks || []).map((risk, idx) => (
-            <div
-              key={idx}
-              className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-900">
-                  {risk.region}: {risk.event}
-                </span>
-                <span className="px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 text-[10px] font-mono font-bold">
-                  {risk.riskLevel}
-                </span>
+        <Card className="lg:col-span-5">
+          <CardHeader icon={Newspaper} title="Headlines" subtitle={report.aiMode === 'live' ? 'From live web search' : 'Sample headlines (demo)'} />
+          <ul className="divide-y divide-slate-100 px-5 pb-3">
+            {(report.newsFeed || []).slice(0, 5).map((n, i) => (
+              <li key={i} className="py-3">
+                <button
+                  onClick={() => onAsk(`Explain this headline and why it might matter for markets: "${n.headline}"`, 'all')}
+                  className="group block text-left"
+                >
+                  <span className="text-sm font-medium leading-snug text-slate-800 group-hover:text-blue-700">{n.headline}</span>
+                  <span className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
+                    <span>{n.source}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>{n.publishedAt}</span>
+                    <span className="ml-auto inline-flex items-center gap-0.5 text-blue-600 opacity-0 transition-opacity group-hover:opacity-100">
+                      Ask <ArrowUpRight className="w-3 h-3" />
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      </div>
+
+      {/* 6. Portfolio + Risks */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <Card className="lg:col-span-7 overflow-hidden">
+          <CardHeader
+            icon={Wallet}
+            title="Portfolio"
+            subtitle={plaidStatus?.institution ? `Linked: ${plaidStatus.institution}` : 'No account linked'}
+            action={
+              <div className="flex items-center gap-2">
+                {simulated && <SimulatedBadge label="Sample account" />}
+                {onSyncPlaid && (
+                  <button onClick={sync} disabled={isSyncing} aria-label="Refresh holdings" className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50">
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                  </button>
+                )}
+                {onNavigateToPlaid && (
+                  <button onClick={onNavigateToPlaid} className="text-xs font-medium text-blue-700 hover:text-blue-900">
+                    Details
+                  </button>
+                )}
               </div>
-              <p className="text-xs text-slate-600">{risk.impact}</p>
-            </div>
-          ))}
-        </div>
+            }
+          />
+          <div className="grid grid-cols-3 gap-px border-y border-slate-100 bg-slate-100">
+            {[
+              { label: 'Total value', value: usd(totalValue) },
+              { label: 'Cash available', value: usd(totalCash) },
+              { label: 'Unrealized P&L', value: `${totalPnL >= 0 ? '+' : ''}${usd(totalPnL)}`, tone: totalPnL >= 0 ? 'text-emerald-600' : 'text-rose-600' },
+            ].map((s) => (
+              <div key={s.label} className="bg-white px-5 py-3.5">
+                <div className="text-[11px] text-slate-500">{s.label}</div>
+                <div className={`mt-0.5 truncate text-base font-semibold tabular-nums ${s.tone || 'text-slate-900'}`}>{s.value}</div>
+              </div>
+            ))}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] text-left text-sm">
+              <thead>
+                <tr className="text-[11px] uppercase tracking-wide text-slate-500">
+                  <th className="py-2.5 pl-5 pr-3 font-medium">Holding</th>
+                  <th className="px-3 py-2.5 text-right font-medium">Price</th>
+                  <th className="px-3 py-2.5 text-right font-medium">Value</th>
+                  <th className="py-2.5 pl-3 pr-5 text-right font-medium">Return</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {holdings.slice(0, 6).map((h) => (
+                  <tr key={h.securityId} className="hover:bg-slate-50/70">
+                    <td className="py-2.5 pl-5 pr-3">
+                      <div className="font-semibold text-slate-900">{h.ticker}</div>
+                      <div className="max-w-[200px] truncate text-xs text-slate-500">{h.name}</div>
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-700">{usd(h.closePrice, 2)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-medium text-slate-900">{usd(h.currentValue)}</td>
+                    <td className={`py-2.5 pl-3 pr-5 text-right tabular-nums font-medium ${h.unrealizedPnLPct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {h.unrealizedPnLPct >= 0 ? '+' : ''}
+                      {h.unrealizedPnLPct}%
+                    </td>
+                  </tr>
+                ))}
+                {holdings.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-8 text-center text-sm text-slate-500">
+                      Link a brokerage account to see holdings.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {simulated && (
+            <p className="border-t border-slate-100 px-5 py-3 text-[11px] text-slate-500">
+              Sample portfolio for demonstration. Balances and returns are illustrative and not real account data.
+            </p>
+          )}
+        </Card>
+
+        <Card className="lg:col-span-5">
+          <CardHeader icon={ShieldAlert} title="Risk watch" subtitle="Events that could move markets" />
+          <ul className="space-y-2.5 px-5 pb-5">
+            {(report.politicalRisks || []).slice(0, 4).map((r, i) => (
+              <li key={i} className="rounded-xl border border-slate-100 bg-slate-50/60 p-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="text-sm font-medium leading-snug text-slate-900">{r.event}</span>
+                  <span
+                    className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                      r.riskLevel === 'CRITICAL' || r.riskLevel === 'HIGH' ? RISK_STYLE.High : r.riskLevel === 'MEDIUM' ? RISK_STYLE.Elevated : RISK_STYLE.Moderate
+                    }`}
+                  >
+                    {r.riskLevel.toLowerCase()}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">{r.impact}</p>
+                <div className="mt-1.5 text-[11px] text-slate-400">{r.region}</div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      </div>
+
+      {/* 7. Disclosure */}
+      <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-5 py-4">
+        <InlineDisclaimer text="Sentinel Trading is an educational research tool and is not a registered broker-dealer or investment adviser. Market data may be delayed or illustrative. AI-generated content may contain errors; verify all information with original sources." />
+        {onOpenDisclosures && (
+          <button onClick={onOpenDisclosures} className="ml-5 mt-1 text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900">
+            Read full disclosures
+          </button>
+        )}
       </div>
     </div>
   );
