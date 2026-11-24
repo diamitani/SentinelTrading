@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowRight, Check, ChevronDown, MessageSquareText, FileSearch, Wallet, ShieldCheck } from 'lucide-react';
 import { PLANS, BILLING_ENABLED, priceLabel } from '../config/plans';
 import { ROUTES, linkClick } from '../lib/router';
 import { UserProfile } from '../services/authService';
 import { SHORT_DISCLOSURE, DisclosuresModal } from './compliance/Compliance';
 import { Logo } from './Logo';
+import { track } from '../services/funnel';
 
 const STEPS = [
   {
@@ -52,6 +53,14 @@ const FAQS = [
 export const LandingPage: React.FC<{ user: UserProfile | null }> = ({ user }) => {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [disclosuresOpen, setDisclosuresOpen] = useState(false);
+  useEffect(() => {
+    if (!user) track('landing_view');
+  }, [user]);
+  // Every "start" button records which spot on the page converted.
+  const ctaClick = (to: string, where: string) => (e: React.MouseEvent) => {
+    if (!user) track('cta_click', { props: { where } });
+    linkClick(to)(e);
+  };
 
   const primaryCta = user
     ? { href: ROUTES.app, label: 'Open your dashboard' }
@@ -76,7 +85,7 @@ export const LandingPage: React.FC<{ user: UserProfile | null }> = ({ user }) =>
             )}
             <a
               href={primaryCta.href}
-              onClick={linkClick(primaryCta.href)}
+              onClick={ctaClick(primaryCta.href, 'nav')}
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
             >
               {user ? 'Dashboard' : 'Start free'}
@@ -108,7 +117,7 @@ export const LandingPage: React.FC<{ user: UserProfile | null }> = ({ user }) =>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <a
                 href={primaryCta.href}
-                onClick={linkClick(primaryCta.href)}
+                onClick={ctaClick(primaryCta.href, 'hero')}
                 className="group inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 text-base font-semibold text-white shadow-md shadow-blue-600/20 transition-colors hover:bg-blue-700"
               >
                 {primaryCta.label}
@@ -231,7 +240,7 @@ export const LandingPage: React.FC<{ user: UserProfile | null }> = ({ user }) =>
                   </ul>
                   <a
                     href={user ? ROUTES.app : href}
-                    onClick={linkClick(user ? ROUTES.app : href)}
+                    onClick={ctaClick(user ? ROUTES.app : href, `plan_${p.id}`)}
                     className={`mt-8 inline-flex items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold transition-colors ${
                       p.recommended ? 'bg-blue-600 text-white hover:bg-blue-700' : 'border border-slate-300 bg-white text-slate-900 hover:bg-slate-50'
                     }`}
@@ -280,7 +289,7 @@ export const LandingPage: React.FC<{ user: UserProfile | null }> = ({ user }) =>
           </div>
           <a
             href={primaryCta.href}
-            onClick={linkClick(primaryCta.href)}
+            onClick={ctaClick(primaryCta.href, 'footer_band')}
             className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-white px-6 py-3.5 text-base font-semibold text-slate-900 transition-colors hover:bg-blue-50"
           >
             {primaryCta.label} <ArrowRight className="h-4 w-4" />

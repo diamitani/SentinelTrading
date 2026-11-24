@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AnswerSource, ResearchFocus, streamAnswer } from '../../services/answerEngine';
+import { AnswerSource, NeedsKeyReason, ResearchFocus, ResearchTrace, streamAnswer } from '../../services/answerEngine';
+import { trackOnce, track } from '../../services/funnel';
 
 export interface ResearchStep {
   step: string;
@@ -16,6 +17,8 @@ export interface ResearchTurn {
   answer: string;
   related: string[];
   mode?: 'live' | 'demo';
+  trace?: ResearchTrace;
+  needsKey?: NeedsKeyReason;
   model?: string;
   disclosure?: string;
   complianceFlags: string[];
@@ -63,7 +66,7 @@ function saveThreads(threads: ResearchThread[]) {
  * Research thread state shared by the full Ask page and the floating chat.
  * Holds every thread in localStorage so history survives a refresh.
  */
-export function useResearch() {
+export function useResearch(plan?: string) {
   const [threads, setThreads] = useState<ResearchThread[]>(() => loadThreads());
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -111,7 +114,7 @@ export function useResearch() {
 
       try {
         await streamAnswer(
-          { query: turn.query, focus: turn.focus, history },
+          { query: turn.query, focus: turn.focus, history, plan },
           (event) => {
             updateTurn(threadId, turn.id, (cur) => {
               switch (event.type) {
@@ -125,6 +128,27 @@ export function useResearch() {
                   return { ...cur, answer: event.text };
                 case 'related':
                   return { ...cur, related: event.questions };
+                case 'pipeline': {
+                  const t: ResearchTrace = { ...(cur.trace || {}) };
+                  if (event.stage === 'pal') {
+                    t.intent = event.intent;
+                    t.brief = event.brief;
+                    t.route = event.route;
+                    t.hub = event.hub;
+                  } else if (event.stage === 'npao') {
+                    t.plan = event.plan;
+                  } else if (event.stage === 'ragdal-pass') {
+                    t.topics = event.topics;
+                  } else if (event.stage === 'report') {
+                    const { topics, ...rest } = event.report || {};
+                    t.topics = topics;
+                    t.report = rest;
+                  }
+                  return { ...cur, trace: t };
+                }
+                case 'needs_key':
+                  track('needs_key_shown', { plan, props: { reason: event.reason } });
+                  return { ...cur, needsKey: event.reason, status: 'done' };
                 case 'meta':
                   return {
                     ...cur,
@@ -132,8 +156,10 @@ export function useResearch() {
                     model: event.model,
                     disclosure: event.disclosure,
                     complianceFlags: event.complianceFlags || [],
+                    trace: { ...(cur.trace || {}), hubSaved: event.hubSaved },
                   };
                 case 'done':
+                  if (cur.answer && !cur.needsKey) trackOnce('first_answer_received', { plan });
                   return { ...cur, status: 'done' };
                 case 'error':
                   return { ...cur, status: 'error', error: event.message };
@@ -161,13 +187,14 @@ export function useResearch() {
         }
       }
     },
-    [updateTurn]
+    [updateTurn, plan]
   );
 
   const ask = useCallback(
     (query: string, focus: ResearchFocus = 'all', options?: { newThread?: boolean }) => {
       const q = query.trim();
       if (!q) return;
+      trackOnce('first_question_asked', { plan });
       const turn: ResearchTurn = {
         id: uid(),
         query: q,

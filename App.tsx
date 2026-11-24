@@ -11,6 +11,7 @@ import { LandingPage } from './components/LandingPage';
 import { AuthPage } from './components/AuthPage';
 import { AppShell } from './components/AppShell';
 import { LoadingScreen } from './components/LoadingScreen';
+import { onboarding } from './services/funnel';
 
 const App: React.FC = () => {
   const path = usePath();
@@ -41,7 +42,8 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!checkedSession) return;
     if (isApp && !user) navigate(ROUTES.signup, { replace: true });
-    else if (isAuthPage && user) navigate(ROUTES.app, { replace: true });
+    // A brand-new user stays in the sign-up wizard until they finish the AI step.
+    else if (isAuthPage && user && !onboarding.active()) navigate(ROUTES.app, { replace: true });
     else if (!isKnown) navigate(ROUTES.home, { replace: true });
   }, [checkedSession, user, isApp, isAuthPage, isKnown]);
 

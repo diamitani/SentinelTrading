@@ -11,19 +11,84 @@ export interface AnswerSource {
   url: string;
   domain: string;
   snippet?: string;
+  /** RAG DAL credibility tier: 1 official, 2 major news, 3 community. */
+  tier?: 1 | 2 | 3;
+  tierLabel?: string;
+  credibility?: number;
+  fromHub?: boolean;
 }
+
+export type NpaoCategory = 'necessity' | 'anxiety' | 'priority' | 'opportunity';
+
+export interface TraceTopic {
+  id: string;
+  question: string;
+  category: NpaoCategory;
+  sourceIds: number[];
+  confidence: number;
+  breakdown: { sources: number; consistency: number; tier: number; recency: number };
+  status: 'verified' | 'uncertain' | 'open' | 'reused' | 'deferred';
+  passes: number;
+  note?: string;
+}
+
+/** How an answer was researched (PAL -> NPAO -> RAG DAL -> Hub). */
+export interface ResearchTrace {
+  intent?: {
+    primary_intent: string;
+    domain: string;
+    subject: string;
+    tickers: string[];
+    ambiguity_score: number;
+    time_sensitive: boolean;
+    source: 'model' | 'rules';
+  };
+  brief?: string;
+  route?: { phase: string; reason: string };
+  hub?: { enabled: boolean; reason: string | null; context: number; reused: string[] };
+  plan?: {
+    tasks: {
+      id: string;
+      question: string;
+      category: NpaoCategory;
+      priority: number;
+      queue: string;
+      doer: string;
+      gated: boolean;
+      scores: { phase_urgency: number; dependency_impact: number; business_impact: number; resource_efficiency: number };
+    }[];
+    pattern: string;
+    weights: Record<string, number>;
+  };
+  topics?: TraceTopic[];
+  report?: {
+    passes_run: number;
+    overall_confidence: number;
+    threshold: number;
+    open_questions: string[];
+    gaps: string[];
+    tier_mix: { tier1: number; tier2: number; tier3: number };
+    elapsed_ms: number;
+  };
+  hubSaved?: number;
+}
+
+export type NeedsKeyReason = 'missing' | 'rejected' | 'rate-limited';
 
 export type AnswerEvent =
   | { type: 'status'; step: string; label: string }
   | { type: 'sources'; sources: AnswerSource[] }
   | { type: 'answer'; text: string; final?: boolean }
   | { type: 'related'; questions: string[] }
+  | { type: 'pipeline'; stage: 'pal' | 'npao' | 'ragdal-pass' | 'report'; [key: string]: any }
+  | { type: 'needs_key'; reason: NeedsKeyReason }
   | {
       type: 'meta';
-      mode: 'live' | 'demo';
+      mode: 'live';
       model: string;
       disclosure: string;
       complianceFlags: string[];
+      hubSaved?: number;
     }
   | { type: 'done' }
   | { type: 'error'; message: string };
@@ -32,6 +97,8 @@ export interface AskRequest {
   query: string;
   focus: ResearchFocus;
   history: { role: 'user' | 'model'; text: string }[];
+  /** The user's plan, so answers match their level (beginner = plain English). */
+  plan?: string;
 }
 
 export async function streamAnswer(

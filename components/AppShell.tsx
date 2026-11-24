@@ -12,6 +12,8 @@ import { getPlan } from '../config/plans';
 import { WelcomeCard } from './WelcomeCard';
 import { AiKeyModal } from './AiKeyModal';
 import { getAiKey, onAiKeyChange } from '../services/aiKeyService';
+import { OPEN_AI_KEY_EVENT } from './research/ResearchTrace';
+import { trackOnce } from '../services/funnel';
 import {
   MarketReport,
   AppView,
@@ -94,6 +96,12 @@ export const AppShell: React.FC<AppShellProps> = ({ user, onSignOut }) => {
   const [isAiKeyModalOpen, setIsAiKeyModalOpen] = useState(false);
   const [hasAiKey, setHasAiKey] = useState<boolean>(Boolean(getAiKey()));
   useEffect(() => onAiKeyChange(() => setHasAiKey(Boolean(getAiKey()))), []);
+  useEffect(() => {
+    const open = () => setIsAiKeyModalOpen(true);
+    window.addEventListener(OPEN_AI_KEY_EVENT, open);
+    trackOnce('dashboard_first_view', { plan: user.plan, props: { has_ai_key: Boolean(getAiKey()) } });
+    return () => window.removeEventListener(OPEN_AI_KEY_EVENT, open);
+  }, [user.plan]);
   const [report, setReport] = useState<MarketReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<AppView>(AppView.DASHBOARD);
@@ -112,7 +120,7 @@ export const AppShell: React.FC<AppShellProps> = ({ user, onSignOut }) => {
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
   // Shared research engine (full Ask page + floating assistant)
-  const research = useResearch();
+  const research = useResearch(user.plan);
   const [pendingQuery, setPendingQuery] = useState<{ query: string; focus: ResearchFocus } | null>(null);
   const [disclosuresOpen, setDisclosuresOpen] = useState(false);
   const [paperTrade, setPaperTrade] = useState<any | null>(null);

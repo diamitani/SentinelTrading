@@ -3,6 +3,9 @@ import { createHash } from 'crypto';
 import { generateText } from 'ai';
 // Used only by Ask Sentinel, which needs Google Search grounding + citations.
 import { GoogleGenAI } from '@google/genai';
+import { Llm } from './_lib/rostr/llm.js';
+import { runResearch } from './_lib/rostr/pipeline.js';
+import { hubStatus, recordFunnelEvent } from './_lib/rostr/hub.js';
 
 const app = express();
 
@@ -2876,156 +2879,7 @@ const DEMO_REFERENCE_LIBRARY: Record<string, AskSource[]> = {
   ],
 };
 
-function pickDemoSources(q: string, focus: string): AskSource[] {
-  const lower = q.toLowerCase();
-  const picks: AskSource[] = [];
-  const add = (key: string) => DEMO_REFERENCE_LIBRARY[key].forEach((s) => picks.push({ ...s }));
-  if (/option|call|put|premium|strike|skew/.test(lower)) add('options');
-  if (focus === 'macro' || /fed|fomc|rate|inflation|cpi|gdp|yield|treasur|recession|job/.test(lower)) add('macro');
-  if (focus === 'commodities' || /alumin|commodit|futures|oil|gold|copper|kalshi|polymarket|prediction|event contract/.test(lower)) add('commodities');
-  if (focus === 'filings' || /10-k|10-q|8-k|filing|earnings|revenue|balance sheet|sec\b/.test(lower)) add('filings');
-  add('base');
-  const seen = new Set<string>();
-  return picks
-    .filter((s) => (seen.has(s.url) ? false : (seen.add(s.url), true)))
-    .slice(0, 5)
-    .map((s, i) => ({ ...s, id: i + 1 }));
-}
 
-function buildDemoAnswer(q: string, sources: AskSource[]): string {
-  const lower = q.toLowerCase();
-  const cite = (domainPart: string) => {
-    const s = sources.find((x) => x.domain.includes(domainPart));
-    return s ? ` [${s.id}]` : '';
-  };
-  const base = cite('investor.gov') || cite('finra.org');
-
-  let body: string;
-  if (/option|call|put|premium|strike|skew/.test(lower)) {
-    body = `Options give the right, but not the obligation, to buy (call) or sell (put) an asset at a set price before expiry. They can magnify both gains and losses, and buyers can lose the entire premium they paid${cite('finra.org/investors/investing')}.
-
-## How to think about it
-- **Defined cost for buyers:** the most a buyer can lose is the premium, but that loss is common if the move doesn't happen in time${cite('finra.org/investors/investing')}.
-- **Time decay:** an option loses value as expiry approaches, all else equal.
-- **Implied volatility:** prices rise when the market expects big moves, so "cheap" options are rare around known events like earnings.
-- **Sizing:** many investors limit any single options position to a small share of their portfolio${base}.`;
-  } else if (/fed|fomc|rate|inflation|cpi|yield|treasur|recession/.test(lower)) {
-    body = `Interest-rate expectations drive a large part of stock and bond pricing. The Federal Reserve sets its policy rate at FOMC meetings, and markets move when data changes the expected path of that rate${cite('federalreserve.gov')}.
-
-## What to watch
-- **Inflation and jobs data:** CPI, PCE and payrolls shape how the Fed reads the economy${cite('stlouisfed')}.
-- **The yield curve:** long-term vs short-term Treasury yields signal growth expectations.
-- **Rate-sensitive sectors:** utilities, real estate and growth stocks often react most to rate surprises.
-- **Positioning:** when a move is widely expected, it is usually already reflected in prices.`;
-  } else if (/alumin|commodit|futures|oil|gold|copper/.test(lower)) {
-    body = `Commodity prices respond to supply, demand, inventories and the US dollar. Futures let traders express a view on those prices, but they use leverage, so small moves can create large gains or losses${cite('cftc.gov')}.
-
-## How second-order effects work
-- **Demand chain:** a jump in demand for a finished product (for example canned drinks) can raise demand for an input (aluminum sheet)${cite('cmegroup.com')}.
-- **Who is exposed:** producers, processors and end users of the input are affected differently: higher prices help producers but squeeze buyers' margins.
-- **Lag and noise:** the link is rarely one-to-one. Inventories, imports and energy costs often matter more than any single company's demand.
-- **Contract mechanics:** futures have expiry dates, margin calls and roll costs that ETFs and stocks do not${cite('cftc.gov')}.`;
-  } else if (/kalshi|polymarket|prediction|event contract|bet/.test(lower)) {
-    body = `Prediction-market prices can be read as rough crowd probabilities for an event. Different venues sometimes quote different prices for similar events, but those gaps usually reflect fees, contract wording, liquidity and access limits, so they are rarely free money${cite('cftc.gov')}.
-
-## Before reading too much into a price gap
-- **Contract terms:** check that two contracts settle on exactly the same event and source.
-- **Liquidity:** a thin order book means the quoted price may not be tradable in size.
-- **Fees and capital lock-up:** money tied up until settlement has an opportunity cost.
-- **Regulation:** venue rules and eligibility differ by jurisdiction${cite('cftc.gov')}.`;
-  } else if (/10-k|10-q|8-k|filing|earnings|revenue|balance sheet/.test(lower)) {
-    body = `Company filings are the primary source for fundamentals. Annual reports (10-K), quarterly reports (10-Q) and event reports (8-K) are free on SEC EDGAR${cite('sec.gov')}.
-
-## What to read first
-- **Risk factors:** management's own list of what could go wrong.
-- **MD&A:** management's explanation of results and trends.
-- **Cash flow statement:** shows whether reported profits turn into cash.
-- **Share count and debt:** dilution and leverage can change the picture quickly.`;
-  } else {
-    body = `Here's a research-style overview of "${q.slice(0, 140)}". In demo mode Sentinel can't pull live prices or news, so treat this as a framework for your own research rather than a current market view${base}.
-
-## A simple research checklist
-- **What is priced in:** what do analysts and markets already expect?
-- **Catalysts:** upcoming earnings, product launches, data releases or policy decisions.
-- **Fundamentals:** revenue growth, margins, cash flow and balance-sheet strength${cite('sec.gov')}.
-- **Diversification:** how the idea fits with everything else you own${cite('investor.gov')}.`;
-  }
-
-  return `${body}
-
-## Key risks
-- Prices can move against any view, and past patterns may not repeat.
-- Liquidity, fees, taxes and execution costs reduce real-world results.
-- Leverage (margin, futures, options) can cause losses larger than expected${cite('finra.org')}.
-
-*Demo mode: live web search is not configured, so this answer uses general investor-education sources and contains no live market data.*`;
-}
-
-function buildRelatedQuestions(q: string, focus: string): string[] {
-  const lower = q.toLowerCase();
-  if (/option|call|put/.test(lower))
-    return ['How does implied volatility affect option prices?', 'What is the difference between buying and selling options?', 'How do professionals size options positions?'];
-  if (/fed|rate|inflation|yield/.test(lower))
-    return ['Which sectors are most sensitive to rate cuts?', 'How does the yield curve signal recessions?', 'What data does the Fed watch most closely?'];
-  if (/alumin|commodit|futures|oil|gold|copper/.test(lower) || focus === 'commodities')
-    return ['What drives aluminum prices besides demand?', 'How do commodity ETFs differ from futures?', 'Which companies are most exposed to aluminum costs?'];
-  if (/kalshi|polymarket|prediction/.test(lower))
-    return ['How are prediction markets regulated in the US?', 'Why do prices differ across prediction venues?', 'How accurate have prediction markets been historically?'];
-  return ['What are the biggest market risks this month?', 'How do I evaluate a company from its 10-K?', 'What does diversification actually protect against?'];
-}
-
-async function generateRelatedLive(ai: GoogleGenAI | null, q: string, answer: string): Promise<string[] | null> {
-  if (!ai) return null;
-  try {
-    const call = ai.models.generateContent({
-      model: ASK_MODEL,
-      contents: `Question: ${q}\n\nAnswer summary: ${answer.slice(0, 1200)}\n\nWrite 3 short, neutral follow-up research questions a curious investor might ask next. No buy/sell language. Return ONLY a JSON array of 3 strings.`,
-    });
-    const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000));
-    const resp: any = await Promise.race([call, timeout]);
-    const raw = String(resp?.text || '').replace(/```json|```/g, '').trim();
-    const arr = JSON.parse(raw.slice(raw.indexOf('['), raw.lastIndexOf(']') + 1));
-    if (Array.isArray(arr)) {
-      return arr
-        .filter((x) => typeof x === 'string')
-        .map((x) => applyComplianceFilter(x).text.slice(0, 160))
-        .slice(0, 3);
-    }
-  } catch {
-    /* fall back to templates */
-  }
-  return null;
-}
-
-// Insert [n] citation markers using Gemini grounding supports.
-function annotateWithCitations(text: string, supports: any[], chunkToSourceId: Map<number, number>): string {
-  if (!Array.isArray(supports) || supports.length === 0) return text;
-  const inserts: { at: number; marker: string }[] = [];
-  let searchFrom = 0;
-  for (const sup of supports) {
-    const segText: string = sup?.segment?.text || '';
-    const ids: number[] = Array.from(
-      new Set(
-        ((sup?.groundingChunkIndices as number[]) || [])
-          .map((ci) => chunkToSourceId.get(ci))
-          .filter((x): x is number => typeof x === 'number')
-      )
-    ).sort((a, b) => a - b);
-    if (!segText || ids.length === 0) continue;
-    let idx = text.indexOf(segText, searchFrom);
-    if (idx === -1) idx = text.indexOf(segText);
-    if (idx === -1) continue;
-    const end = idx + segText.length;
-    searchFrom = end;
-    inserts.push({ at: end, marker: ids.map((n) => ` [${n}]`).join('') });
-  }
-  inserts.sort((a, b) => b.at - a.at);
-  let out = text;
-  for (const ins of inserts) out = out.slice(0, ins.at) + ins.marker + out.slice(ins.at);
-  return out;
-}
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 app.post('/api/ask', async (req, res) => {
   const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'anon').split(',')[0].trim();
@@ -3046,7 +2900,8 @@ app.post('/api/ask', async (req, res) => {
 
   const userKey = getUserAiKey(req);
   const keyId = userKey ? keyFingerprint(userKey) : '';
-  const ai = userKey && Date.now() >= (quotaCooldownUntil.get(keyId) || 0) ? new GoogleGenAI({ apiKey: userKey }) : null;
+  const coolingDown = Boolean(userKey) && Date.now() < (quotaCooldownUntil.get(keyId) || 0);
+  const beginner = req.body?.plan !== 'active' && req.body?.plan !== 'pro';
 
   res.status(200);
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -3064,9 +2919,9 @@ app.post('/api/ask', async (req, res) => {
     res.write(`data: ${JSON.stringify(payload)}\n\n`);
   };
 
-  const finish = (related: string[], mode: 'live' | 'demo', flags: string[]) => {
+  const finish = (related: string[], flags: string[], extra: Record<string, unknown> = {}) => {
     send({ type: 'related', questions: related });
-    send({ type: 'meta', mode, model: mode === 'live' ? ASK_MODEL : 'sentinel-demo', disclosure: SENTINEL_DISCLOSURE, complianceFlags: flags });
+    send({ type: 'meta', mode: 'live', model: ASK_MODEL, disclosure: SENTINEL_DISCLOSURE, complianceFlags: flags, ...extra });
     send({ type: 'done' });
     if (!closed) res.end();
   };
@@ -3085,101 +2940,48 @@ app.post('/api/ask', async (req, res) => {
 - Researching a company using public information such as SEC filings [1].
 - Understanding the risks of a strategy before you use it.`,
       });
-      return finish(['How can I spot a pump-and-dump scheme?', 'What counts as insider trading?', 'How do I research a stock using public filings?'], 'demo', ['prohibited request declined']);
+      return finish(['How can I spot a pump-and-dump scheme?', 'What counts as insider trading?', 'How do I research a stock using public filings?'], ['prohibited request declined']);
     }
 
-    send({ type: 'status', step: 'plan', label: 'Understanding your question' });
+    // Live research only. No key (or a key on cooldown) -> ask the user to connect one.
+    if (!userKey) {
+      send({ type: 'needs_key', reason: 'missing' });
+      send({ type: 'done' });
+      return res.end();
+    }
+    if (coolingDown) {
+      send({ type: 'needs_key', reason: 'rate-limited' });
+      send({ type: 'done' });
+      return res.end();
+    }
 
-    const canUseLive = Boolean(ai);
-    if (canUseLive) {
-      try {
-        send({ type: 'status', step: 'search', label: 'Searching the web for current sources' });
-        const convo = history.map((m) => `${m.role === 'user' ? 'User' : 'Sentinel'}: ${m.text}`).join('\n');
-        const prompt = `${convo ? `Conversation so far:\n${convo}\n\n` : ''}Today's date: ${new Date().toDateString()}.
-Research focus: ${ASK_FOCUS_LABELS[focus]}.
-Question: ${query}`;
-
-        const stream: any = await ai!.models.generateContentStream({
-          model: ASK_MODEL,
-          contents: prompt,
-          config: {
-            systemInstruction: COMPLIANCE_SYSTEM_INSTRUCTION,
-            tools: [{ googleSearch: {} }],
-            temperature: 0.3,
-          },
-        });
-
-        let raw = '';
-        let sources: AskSource[] = [];
-        const chunkToSourceId = new Map<number, number>();
-        let supports: any[] = [];
-        let wroteStatus = false;
-
-        for await (const chunk of stream) {
-          if (closed) break;
-          const piece = typeof chunk?.text === 'string' ? chunk.text : '';
-          const gm = chunk?.candidates?.[0]?.groundingMetadata;
-          if (gm?.groundingChunks?.length) {
-            const byUrl = new Map(sources.map((s) => [s.url, s.id]));
-            (gm.groundingChunks as any[]).forEach((gc, ci) => {
-              const uri = gc?.web?.uri;
-              if (!uri) return;
-              let id = byUrl.get(uri);
-              if (!id) {
-                id = sources.length + 1;
-                const title = gc.web.title || domainOf(uri);
-                sources.push({ id, title, url: uri, domain: gc.web.domain || (title.includes('.') && !title.includes(' ') ? title : domainOf(uri)) });
-                byUrl.set(uri, id);
-              }
-              chunkToSourceId.set(ci, id);
-            });
-            send({ type: 'sources', sources });
-          }
-          if (gm?.groundingSupports?.length) supports = gm.groundingSupports;
-          if (piece) {
-            if (!wroteStatus) {
-              send({ type: 'status', step: 'write', label: sources.length ? `Writing answer from ${sources.length} sources` : 'Writing answer' });
-              wroteStatus = true;
-            }
-            raw += piece;
-            send({ type: 'answer', text: applyComplianceFilter(raw).text });
-          }
-        }
-
-        if (raw.trim()) {
-          const annotated = annotateWithCitations(raw, supports, chunkToSourceId);
-          const filtered = applyComplianceFilter(annotated);
-          send({ type: 'answer', text: filtered.text, final: true });
-          const related = (await generateRelatedLive(ai, query, filtered.text)) || buildRelatedQuestions(query, focus);
-          return finish(related, 'live', filtered.flags);
-        }
-      } catch (err: any) {
-        if (isQuotaOrRateLimitError(err)) setBounded(quotaCooldownUntil, keyId, Date.now() + QUOTA_COOLDOWN_MS);
-        console.info('Ask engine live mode unavailable, using demo mode:', String(err?.message || err).slice(0, 160));
+    const llm = new Llm(new GoogleGenAI({ apiKey: userKey }), ASK_MODEL);
+    try {
+      const result = await runResearch({
+        llm,
+        query,
+        focus,
+        history,
+        beginner,
+        systemInstruction: COMPLIANCE_SYSTEM_INSTRUCTION,
+        compliance: applyComplianceFilter,
+        emit: send,
+        isClosed: () => closed,
+      });
+      return finish(result.related, result.flags, { hubSaved: result.hubSaved, hub: hubStatus() });
+    } catch (err: any) {
+      if (isQuotaOrRateLimitError(err)) {
+        setBounded(quotaCooldownUntil, keyId, Date.now() + QUOTA_COOLDOWN_MS);
+        send({ type: 'needs_key', reason: 'rate-limited' });
+      } else if (isAuthError(err) || /api key not valid|permission|unauthori[sz]ed|forbidden/i.test(errText(err))) {
+        send({ type: 'needs_key', reason: 'rejected' });
+      } else {
+        console.info('ROSTR research failed:', errText(err).slice(0, 200));
+        send({ type: 'error', message: 'Research could not be completed. Please try again in a moment.' });
       }
+      send({ type: 'done' });
+      return res.end();
     }
-
-    // Demo mode: same streaming experience, using public investor-education sources.
-    send({ type: 'status', step: 'search', label: 'Searching reference library' });
-    await sleep(350);
-    const sources = pickDemoSources(query, focus);
-    send({ type: 'sources', sources });
-    send({ type: 'status', step: 'read', label: `Reading ${sources.length} sources` });
-    await sleep(450);
-    send({ type: 'status', step: 'write', label: 'Writing answer' });
-    const full = applyComplianceFilter(buildDemoAnswer(query, sources));
-    const words = full.text.split(/(\s+)/);
-    let acc = '';
-    for (let i = 0; i < words.length; i++) {
-      if (closed) break;
-      acc += words[i];
-      if (i % 6 === 0) {
-        send({ type: 'answer', text: acc });
-        await sleep(18);
-      }
-    }
-    send({ type: 'answer', text: full.text, final: true });
-    return finish(buildRelatedQuestions(query, focus), 'demo', full.flags);
   } catch (err: any) {
     send({ type: 'error', message: 'Something went wrong while researching. Please try again.' });
     if (!closed) res.end();
@@ -3190,11 +2992,52 @@ Question: ${query}`;
 app.get('/api/compliance', (_req, res) => {
   res.json({
     disclosure: SENTINEL_DISCLOSURE,
-    // Live research runs on each user's own key; without one, answers use demo mode.
+    // Live research runs on each user's own key (connected during sign-up).
     liveResearch: 'per-user-key',
     model: ASK_MODEL,
     rateLimitPerMinute: ASK_RATE_LIMIT_PER_MIN,
+    knowledgeBase: hubStatus(),
   });
+});
+
+// ---------------------------------------------------------------------------
+// Funnel analytics. Anonymous: a random browser id + a fixed list of step
+// names. Never accepts emails, names, keys or free text.
+// ---------------------------------------------------------------------------
+const FUNNEL_EVENTS = new Set([
+  'landing_view',
+  'cta_click',
+  'signup_view',
+  'signup_plan_selected',
+  'signup_account_created',
+  'signup_ai_key_view',
+  'signup_ai_key_connected',
+  'signup_ai_key_skipped',
+  'signup_ai_key_invalid',
+  'dashboard_first_view',
+  'first_question_asked',
+  'first_answer_received',
+  'needs_key_shown',
+]);
+const trackBuckets = new Map<string, { count: number; resetAt: number }>();
+
+app.post('/api/track', async (req, res) => {
+  const event = String(req.body?.event || '');
+  const anonId = String(req.body?.anonId || '');
+  if (!FUNNEL_EVENTS.has(event) || !/^[a-z0-9]{8,40}$/i.test(anonId)) return res.status(400).json({ ok: false });
+  const now = Date.now();
+  const b = trackBuckets.get(anonId);
+  if (!b || now > b.resetAt) setBounded(trackBuckets, anonId, { count: 1, resetAt: now + 60_000 });
+  else if (++b.count > 60) return res.status(429).json({ ok: false });
+  const plan = ['beginner', 'active', 'pro'].includes(req.body?.plan) ? req.body.plan : null;
+  const props: Record<string, unknown> = {};
+  if (typeof req.body?.props === 'object' && req.body.props) {
+    for (const [k, v] of Object.entries(req.body.props).slice(0, 8)) {
+      if (/^[a-z_]{1,32}$/.test(k) && (typeof v === 'number' || typeof v === 'boolean' || (typeof v === 'string' && v.length <= 64))) props[k] = v;
+    }
+  }
+  const stored = await recordFunnelEvent({ event, anon_id: anonId, plan, props }).catch(() => false);
+  return res.json({ ok: true, stored });
 });
 
 // Vercel runs this Express app as a serverless function (api/index.ts).

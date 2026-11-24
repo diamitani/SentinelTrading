@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
-import { ArrowLeft, Check, Loader2, MailCheck } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ArrowLeft, Check, Loader2, MailCheck, KeyRound, ExternalLink, ShieldCheck } from 'lucide-react';
 import { PLANS, PlanId, DEFAULT_PLAN, BILLING_ENABLED, getPlan, isPlanId, priceLabel } from '../config/plans';
 import { signUp, logIn, UserProfile, AUTH_MODE } from '../services/authService';
 import { ROUTES, getQueryParam, linkClick } from '../lib/router';
 import { recordRiskAcknowledgement, DisclosuresModal } from './compliance/Compliance';
 import { Logo } from './Logo';
+import { getAiKey, looksLikeGeminiKey, saveAiKey, validateAiKey } from '../services/aiKeyService';
+import { track, onboarding } from '../services/funnel';
 
 interface AuthPageProps {
   mode: 'signup' | 'login';
@@ -16,7 +18,11 @@ const inputClass =
 
 export const AuthPage: React.FC<AuthPageProps> = ({ mode, onAuthed }) => {
   const startingPlan = getQueryParam('plan');
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [pending, setPending] = useState<{ user: UserProfile | null; needsEmailConfirmation: boolean } | null>(null);
+  const [aiKey, setAiKey] = useState('');
+  const [keyBusy, setKeyBusy] = useState(false);
+  const [keyError, setKeyError] = useState<string | null>(null);
   const [plan, setPlan] = useState<PlanId>(isPlanId(startingPlan) ? startingPlan : DEFAULT_PLAN);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -27,6 +33,39 @@ export const AuthPage: React.FC<AuthPageProps> = ({ mode, onAuthed }) => {
   const [checkEmail, setCheckEmail] = useState(false);
   const [disclosuresOpen, setDisclosuresOpen] = useState(false);
 
+  useEffect(() => {
+    if (mode === 'signup') track('signup_view');
+  }, [mode]);
+
+  // Leave the wizard: go to the dashboard (or the "check your email" screen).
+  const finishOnboarding = (result: { user: UserProfile | null; needsEmailConfirmation: boolean }) => {
+    onboarding.finish();
+    if (result.needsEmailConfirmation) setCheckEmail(true);
+    else if (result.user) onAuthed(result.user);
+  };
+
+  const handleConnectKey = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const key = aiKey.trim();
+    setKeyError(null);
+    if (!looksLikeGeminiKey(key)) {
+      setKeyError('That doesn’t look like a Gemini key. It should start with “AIza”.');
+      track('signup_ai_key_invalid', { plan, props: { reason: 'format' } });
+      return;
+    }
+    setKeyBusy(true);
+    const check = await validateAiKey(key);
+    setKeyBusy(false);
+    if (!check.valid) {
+      setKeyError(check.reason || 'Google didn’t accept this key. Copy it again and paste it here.');
+      track('signup_ai_key_invalid', { plan, props: { reason: 'rejected' } });
+      return;
+    }
+    saveAiKey(key);
+    track('signup_ai_key_connected', { plan });
+    if (pending) finishOnboarding(pending);
+  };
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -35,12 +74,21 @@ export const AuthPage: React.FC<AuthPageProps> = ({ mode, onAuthed }) => {
       return;
     }
     setLoading(true);
+    onboarding.start(); // keep the new user in the wizard for the AI step
     try {
       const result = await signUp({ email, password, fullName, plan });
       recordRiskAcknowledgement();
-      if (result.needsEmailConfirmation) setCheckEmail(true);
-      else if (result.user) onAuthed(result.user);
+      track('signup_account_created', { plan, props: { email_confirmation: result.needsEmailConfirmation } });
+      if (getAiKey()) {
+        // Already connected in this browser: skip straight in.
+        finishOnboarding(result);
+      } else {
+        setPending(result);
+        setStep(3);
+        track('signup_ai_key_view', { plan });
+      }
     } catch (err: any) {
+      onboarding.finish();
       setError(err?.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
@@ -149,7 +197,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ mode, onAuthed }) => {
   if (step === 1) {
     return shell(
       <div className="sentinel-fade-in">
-        <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Step 1 of 2</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Step 1 of 3</p>
         <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">Where are you starting?</h1>
         <p className="mt-1.5 text-sm text-slate-600">
           Pick the one that sounds most like you. You can change it later.
@@ -204,7 +252,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({ mode, onAuthed }) => {
         <div className="mt-6 flex justify-end">
           <button
             type="button"
-            onClick={() => setStep(2)}
+            onClick={() => {
+              track('signup_plan_selected', { plan });
+              setStep(2);
+            }}
             className="w-full rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700 sm:w-auto"
           >
             Continue with {selected.name}
@@ -215,6 +266,85 @@ export const AuthPage: React.FC<AuthPageProps> = ({ mode, onAuthed }) => {
     );
   }
 
+  /* ---------------------- Sign up, step 3: AI key (BYOK) ------------------ */
+
+  if (step === 3) {
+    return shell(
+      <div className="sentinel-fade-in">
+        <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Step 3 of 3 · Account created ✓</p>
+        <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">Turn on live research</h1>
+        <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+          Sentinel searches the web, checks every source and writes your answers using <strong>your own free Google AI key</strong>.
+          You stay in control of it, and it costs nothing on Google’s free tier.
+        </p>
+
+        <ol className="mt-5 space-y-2.5">
+          {[
+            { n: 1, title: 'Open Google AI Studio', body: 'Sign in with any Google account.', action: (
+              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50">
+                Open in new tab <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            ) },
+            { n: 2, title: 'Click “Create API key”', body: 'Then click copy. The key starts with “AIza”.' },
+            { n: 3, title: 'Paste it below', body: 'We check it with Google before saving.' },
+          ].map((s) => (
+            <li key={s.n} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3.5">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">{s.n}</span>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold text-slate-900">{s.title}</div>
+                <div className="text-[13px] text-slate-600">{s.body}</div>
+              </div>
+              {s.action}
+            </li>
+          ))}
+        </ol>
+
+        <form onSubmit={handleConnectKey} className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          {keyError && (
+            <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">
+              {keyError}
+            </div>
+          )}
+          <label className="block">
+            <span className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700">
+              <KeyRound className="h-4 w-4 text-slate-400" /> Your Google AI key
+            </span>
+            <input
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              value={aiKey}
+              onChange={(e) => setAiKey(e.target.value)}
+              placeholder="AIza…"
+              className={`${inputClass} font-mono`}
+            />
+          </label>
+          <button type="submit" disabled={keyBusy || !aiKey.trim()} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60">
+            {keyBusy && <Loader2 className="h-4 w-4 animate-spin" />}
+            {keyBusy ? 'Checking with Google…' : 'Connect and open my dashboard'}
+          </button>
+          <p className="flex items-start gap-1.5 text-xs leading-relaxed text-slate-500">
+            <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            Saved only in this browser, never on our servers. Used only for your own research.
+          </p>
+        </form>
+
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={() => {
+              track('signup_ai_key_skipped', { plan });
+              if (pending) finishOnboarding(pending);
+            }}
+            className="text-xs font-medium text-slate-500 underline underline-offset-2 hover:text-slate-800"
+          >
+            I’ll connect it later (research stays off until I do)
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   /* ----------------------- Sign up, step 2: details ----------------------- */
 
   return shell(
@@ -222,7 +352,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ mode, onAuthed }) => {
       <button type="button" onClick={() => setStep(1)} className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900">
         <ArrowLeft className="h-4 w-4" /> Back
       </button>
-      <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-blue-700">Step 2 of 2</p>
+      <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-blue-700">Step 2 of 3</p>
       <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">Create your account</h1>
 
       <div className="mt-4 flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2.5 text-sm">
@@ -261,7 +391,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ mode, onAuthed }) => {
         </label>
         <button type="submit" disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60">
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-          {loading ? 'Creating your account…' : 'Create account and open dashboard'}
+          {loading ? 'Creating your account…' : 'Create account'}
         </button>
       </form>
     </div>

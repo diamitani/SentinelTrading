@@ -18,7 +18,9 @@ import {
 import { AnswerSource, ResearchFocus } from '../../services/answerEngine';
 import { ResearchTurn } from './useResearch';
 import { Markdown } from './Markdown';
-import { DataModeBadge, SHORT_DISCLOSURE } from '../compliance/Compliance';
+import { SHORT_DISCLOSURE } from '../compliance/Compliance';
+import { ResearchTracePanel, NeedsKeyCard, TierChip, ConfidenceBadge } from './ResearchTrace';
+import { Brain, ListOrdered, ScanSearch, Database } from 'lucide-react';
 
 export const FOCUS_OPTIONS: { id: ResearchFocus; label: string; hint: string }[] = [
   { id: 'all', label: 'All markets', hint: 'Search across every source' },
@@ -185,6 +187,14 @@ export const Composer: React.FC<{
 /* ---------------------------- Research steps ----------------------------- */
 
 const STEP_ICON: Record<string, React.ElementType> = {
+  'pal-intent': Brain,
+  hub: Database,
+  'hub-save': Database,
+  npao: ListOrdered,
+  'ragdal-1': ScanSearch,
+  'ragdal-2': ScanSearch,
+  'ragdal-3': ScanSearch,
+  'ragdal-4': ScanSearch,
   plan: Sparkles,
   review: ShieldCheck,
   search: Search,
@@ -265,6 +275,11 @@ const SourceCard: React.FC<{ source: AnswerSource }> = ({ source }) => (
       <span className="truncate">{source.domain}</span>
       <span className="ml-auto font-mono text-slate-400">{source.id}</span>
     </span>
+    {source.tier && (
+      <span className="mt-1.5">
+        <TierChip source={source} />
+      </span>
+    )}
   </a>
 );
 
@@ -352,15 +367,22 @@ export const AnswerTurn: React.FC<{
         {turn.query}
       </h2>
 
-      <ResearchSteps turn={turn} />
+      {turn.needsKey ? (
+        <NeedsKeyCard reason={turn.needsKey} onRetry={onRegenerate} />
+      ) : (
+        <>
+          <ResearchSteps turn={turn} />
+          {!compact && <ResearchTracePanel trace={turn.trace} streaming={streaming} />}
+        </>
+      )}
 
-      <SourcesRow sources={turn.sources} loading={streaming && !turn.answer} compact={compact} />
+      {!turn.needsKey && <SourcesRow sources={turn.sources} loading={streaming && !turn.answer} compact={compact} />}
 
       {(turn.answer || (streaming && turn.sources.length > 0)) && (
         <section aria-label="Answer">
           <h4 className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-slate-900">
             <Sparkles className="w-4 h-4 text-blue-600" /> Answer
-            {turn.mode && <DataModeBadge mode={turn.mode} className="ml-1" />}
+            {turn.trace?.report && <ConfidenceBadge value={turn.trace.report.overall_confidence} />}
           </h4>
           {turn.answer ? (
             <Markdown text={turn.answer} sources={turn.sources} streaming={streaming} compact={compact} />

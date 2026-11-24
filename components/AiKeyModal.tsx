@@ -73,8 +73,8 @@ export const AiKeyModal: React.FC<AiKeyModalProps> = ({ isOpen, onClose, onChang
             Use your own Gemini API key
           </h3>
           <p className="text-xs text-slate-500 mt-1">
-            Sentinel runs AI on <strong>your</strong> Google Gemini account through the Vercel AI
-            Gateway, so you only ever use your own quota.
+            Sentinel researches on <strong>your</strong> Google Gemini account, so you only ever use
+            your own free quota.
           </p>
         </div>
 
@@ -112,7 +112,7 @@ export const AiKeyModal: React.FC<AiKeyModalProps> = ({ isOpen, onClose, onChang
           <ul className="text-[11px] text-slate-500 space-y-1 list-disc pl-4">
             <li>Saved only in this browser. It is not stored on our servers.</li>
             <li>Sent over HTTPS with each AI request and used for that request only.</li>
-            <li>Without a key you still get the app with built-in sample data.</li>
+            <li>Ask Sentinel needs a key to research live on the web.</li>
             <li>Anyone using this browser profile can use the saved key; remove it on shared computers.</li>
           </ul>
 
