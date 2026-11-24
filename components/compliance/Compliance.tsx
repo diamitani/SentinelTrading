@@ -44,6 +44,15 @@ export const FULL_DISCLOSURES: { title: string; body: string }[] = [
 
 const ACK_KEY = 'sentinel_risk_ack_v1';
 
+/** Called when someone ticks the risk checkbox during sign-up, so the gate doesn't ask twice. */
+export const recordRiskAcknowledgement = () => {
+  try {
+    localStorage.setItem(ACK_KEY, new Date().toISOString());
+  } catch {
+    /* ignore */
+  }
+};
+
 export const InlineDisclaimer: React.FC<{ className?: string; text?: string }> = ({
   className = '',
   text = SHORT_DISCLOSURE,
