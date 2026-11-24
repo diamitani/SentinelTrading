@@ -490,6 +490,7 @@ export interface QaAuditReport {
 
 export enum AppView {
   DASHBOARD = 'DASHBOARD',
+  RESEARCH = 'RESEARCH',
   ARBITRAGE_100 = 'ARBITRAGE_100',
   PAL_RUNTIME = 'PAL_RUNTIME',
   AGENT_SANDBOX = 'AGENT_SANDBOX',

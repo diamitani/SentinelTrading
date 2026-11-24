@@ -1,11 +1,21 @@
 import express from 'express';
 import { createHash } from 'crypto';
 import { generateText } from 'ai';
+// Used only by Ask Sentinel, which needs Google Search grounding + citations.
+import { GoogleGenAI } from '@google/genai';
 
 const app = express();
 
-// Small body limit: this API only receives short JSON (wizard settings, chat text).
 app.use(express.json({ limit: '2mb' }));
+
+// Baseline security headers for every API response.
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
 
 // ============================================================================
 // AI via Vercel AI Gateway, with Bring-Your-Own-Key (BYOK) per user
@@ -342,7 +352,7 @@ function getOmnichannelNodes() {
       activeSignalsCount: 194500,
       velocityScore: 98,
       sampleSignal:
-        'Cross-venue prediction spread: Fed Rate Cut & Commodity Inflation contracts trading at 64¢ on Polymarket vs 71¢ on Kalshi (+7.0% riskless arb).',
+        'Cross-venue prediction spread: Fed Rate Cut & Commodity Inflation contracts trading at 64¢ on Polymarket vs 71¢ on Kalshi (+7.0% apparent spread; fees, liquidity and contract terms may differ).',
       sentimentBias: 'DISLOCATION',
       lastPing: 'Live CLOB 8ms',
     },
@@ -427,7 +437,7 @@ function getSecondOrderChains(wizard: ServerWizardConfig = DEFAULT_WIZARD) {
       primaryEvent: 'Prediction Market Cross-Book Dislocation: FOMC Rate Cut & Core CPI Print',
       derivedHypothesis: 'Retail crowd flow on Polymarket lags institutional CFTC orderbook repricing on Kalshi and CME.',
       impactedCommodity: 'Polymarket YES (64¢) vs Kalshi NO/Hedge Equivalent (71¢ Implied) & 2Y Treasury Futures',
-      recommendedContract: 'Long Polymarket Contract / Short Kalshi Counter-Leg (Delta-Neutral +7.0% Locked Spread)',
+      recommendedContract: 'Long Polymarket Contract / Short Kalshi Counter-Leg (Delta-Neutral, +7.0% apparent spread)',
       expectedSpreadExpansion: '+7.0% Cross-Book Prediction Spread',
       confidence: 94,
     },
@@ -1524,7 +1534,7 @@ async function compileRostrHarnessRun(wizard: ServerWizardConfig = DEFAULT_WIZAR
       {
         id: 'prediction-market-arb',
         name: 'prediction-market-arb',
-        description: 'Extracts riskless or high-EV probability spreads across Polymarket, Kalshi, and CME Event Futures.',
+        description: 'Identifies apparent probability spreads across Polymarket, Kalshi, and CME Event Futures.',
         triggers: ['polymarket', 'kalshi', 'prediction', 'betting', 'odds', 'fomc', 'cpi'],
         inputs: ['event_query', 'min_spread_cents', 'capital_allocated'],
         outputs: ['venue_a_yes_price', 'venue_b_no_price', 'locked_arb_return_pct'],
@@ -1672,7 +1682,7 @@ ${truth.noticeBanner}
 | **Cycle Return Goal (${wizard.holdingHorizon})** | \`+${wizard.targetReturnPct}%\` | \`+${(wizard.targetReturnPct * 1.04).toFixed(1)}% Projected\` | **ON TRACK** |
 | **Max Single-Leg Drawdown** | \`<= ${wizard.maxDrawdownPct}%\` | \`0.48% Simulated ATR\` | **PASS** |
 | **Portfolio Sharpe Ratio** | \`>= 2.80\` | \`3.42\` | **EXCEEDS** |
-| **Prediction Market Locked Spread** | \`>= +4.0%\` | \`+7.0% (Polymarket/Kalshi)\` | **EXCEEDS** |
+| **Prediction Market Apparent Spread** | \`>= +4.0%\` | \`+7.0% (Polymarket/Kalshi)\` | **EXCEEDS** |
 | **Foundation Wholeness ($W$)** | \`1.00\` | \`${wholeness.guidedScoreW.toFixed(2)}\` | **VERIFIED** |
 
 ## 2. ROSTR Agent OS Runtime KPIs
@@ -1828,7 +1838,7 @@ By pairing **${wizard.philosophy}** with the **ROSTR Autonomous Agent OS**, our 
 - **Target Cycle Horizon:** \`${wizard.holdingHorizon}\`
 - **Target Cycle Return:** \`+${wizard.targetReturnPct}%\` (\`+$${Math.round(wizard.capitalAllocated * (wizard.targetReturnPct / 100)).toLocaleString()}\` projected gain per cycle)
 - **Downside Protection:** Capped at \`${wizard.maxDrawdownPct}%\` (\`$${Math.round(wizard.capitalAllocated * (wizard.maxDrawdownPct / 100)).toLocaleString()}\` max risk per leg)
-- **Inclusive Entry Path:** Supports starting allocations from **\`$100\`** (compounding toward 10x annual growth) up to **\`$19,800,000\`** institutional Plaid DMA portfolios.
+- **Inclusive Entry Path:** Supports starting allocations from **\`$100\`** (hypothetical compounding scenarios) up to **\`$19,800,000\`** institutional Plaid DMA portfolios.
 `,
     },
     {
@@ -2271,7 +2281,7 @@ app.post('/api/sandbox/execute', async (req, res) => {
   } else if (chosenSkill === 'prediction-market-arb') {
     outputMarkdown = `### Skill Output: \`prediction-market-arb\`
 - **Scanned Venues:** Polymarket CLOB · Kalshi CFTC Regulated Exchange · CME Event Futures
-- **Top Locked Arbitrage Spreads:**
+- **Top Apparent Arbitrage Spreads (not risk-free):**
   1. **\`POLY-ALU\` (Aluminum >$2,700/t Event Contract)**: Buy Polymarket YES at \`62¢\` / Hedge Kalshi & CME Implied \`71¢\` -> **\`+9.0% Locked Event Spread\`**
   2. **\`KALSHI-FED\` (FOMC 25bps Rate Cut)**: Buy Polymarket YES at \`64¢\` / Short Kalshi Counter-Leg \`71¢\` -> **\`+7.0% Delta-Neutral Arb\`**
   3. **\`POLY-NVDA\` (AI Silicon Revenue Beat)**: Buy Polymarket \`74¢\` vs Options Implied \`82¢\` -> **\`+8.0% Probability Edge\`**`;
@@ -2521,7 +2531,7 @@ app.post('/api/gemini/chat', async (req, res) => {
       if (q.includes('pepsi') || q.includes('aluminum') || q.includes('aluminium') || q.includes('commodity')) {
         text = `[ROSTR-DAG: commodity-ripple-scout · 5ms] Second-Order Commodity Ripple Verified (W = 1.00): PepsiCo's canned beverage surge strains packaging-grade aluminum sheet coil. For your ${activeWizardConfig.holdingHorizon} (${activeWizardConfig.goalTarget}) goal: 1) CME Aluminum Dec $2,650 Calls (ALI=F, +3.4% basis spread, 2.4x scale), 2) Alcoa (AA) $42.60 Calls (+10.8% 3-day target), and 3) Ball Corp (BALL) at $64.20 with a ${activeWizardConfig.maxDrawdownPct}% hard stop.`;
       } else if (q.includes('polymarket') || q.includes('kalshi') || q.includes('prediction') || q.includes('bet')) {
-        text = `[ROSTR-DAG: prediction-market-arb · 4ms] Cross-Book Prediction Market Arbitrage: 1) POLY-ALU (Aluminum >$2,700/t): Buy Polymarket YES at 62¢ vs Kalshi/CME Implied 71¢ (+9.0% locked spread), 2) KALSHI-FED (FOMC 25bps Cut): Polymarket 64¢ vs Kalshi 71¢ (+7.0% delta-neutral arb), 3) POLY-NVDA Earnings Beat: 74¢ vs 82¢ options implied (+8.0% edge).`;
+        text = `[ROSTR-DAG: prediction-market-arb · 4ms] Cross-Book Prediction Market Arbitrage: 1) POLY-ALU (Aluminum >$2,700/t): Buy Polymarket YES at 62¢ vs Kalshi/CME Implied 71¢ (+9.0% apparent spread), 2) KALSHI-FED (FOMC 25bps Cut): Polymarket 64¢ vs Kalshi 71¢ (+7.0% delta-neutral arb), 3) POLY-NVDA Earnings Beat: 74¢ vs 82¢ options implied (+8.0% edge).`;
       } else if (q.includes('chip') || q.includes('nvda') || q.includes('tsm') || q.includes('semiconductor')) {
         text = `[ROSTR-DAG: cross-venue-arb-scanner · 5ms] AI Silicon & CoWoS Packaging Vector: TSMC (TSM) ADR is trading at a +3.9% basis dislocation vs Taipei spot while NVIDIA (NVDA) $128.50 call skew shows heavy institutional dark-pool accumulation. Sized at 2.2x scale for your ${activeWizardConfig.holdingHorizon} (+${activeWizardConfig.targetReturnPct}%) target.`;
       } else if (q.includes('elon') || q.includes('car') || q.includes('auto') || q.includes('rivian') || q.includes('ev')) {
@@ -2531,11 +2541,11 @@ app.post('/api/gemini/chat', async (req, res) => {
       } else if (q.includes('plaid') || q.includes('balance') || q.includes('holding') || q.includes('margin')) {
         text = `[PLAID-DMA-LEDGER] Connected to Morgan Stanley Institutional & Apex Clearing. Total Portfolio Balance: $19,800,000 | Available DMA Buying Power: $15,550,000. Top holdings include NVDA (+16.6%), AA (+17.0%), BALL (+11.1%), TSLA (+30.8%), and IBIT (+36.1%).`;
       } else {
-        text = `[ROSTR Co-Pilot · ${activeWizardConfig.holdingHorizon} · +${activeWizardConfig.targetReturnPct}% Target] Foundation Wholeness W = 1.00 active under ${activeWizardConfig.philosophy}. Top priority tickets right now: 1) Alcoa (AA) & CME Aluminum (ALI=F) Calls on the Pepsi packaging ripple (+10.8% 3-day target), 2) POLY-ALU & KALSHI-FED prediction market spreads (+7.0% to +9.0% locked arb), and 3) TSM/NVDA CoWoS dual-listing basis.`;
+        text = `[ROSTR Co-Pilot · ${activeWizardConfig.holdingHorizon} · +${activeWizardConfig.targetReturnPct}% Target] Foundation Wholeness W = 1.00 active under ${activeWizardConfig.philosophy}. Top priority tickets right now: 1) Alcoa (AA) & CME Aluminum (ALI=F) Calls on the Pepsi packaging ripple (+10.8% 3-day target), 2) POLY-ALU & KALSHI-FED prediction market spreads (+7.0% to +9.0% apparent spreads), and 3) TSM/NVDA CoWoS dual-listing basis.`;
       }
     }
 
-    return res.json({ text, aiKeyStatus });
+    return res.json({ text: applyComplianceFilter(text).text, disclosure: SENTINEL_DISCLOSURE, aiKeyStatus });
   } catch {
     return res.json({
       aiKeyStatus,
@@ -2715,6 +2725,475 @@ app.post('/api/growth/simulate', (req, res) => {
       totalTradesExecuted: milestones.reduce((acc, m) => acc + m.tradesExecuted, 0),
     },
     milestones,
+  });
+});
+
+// ============================================================================
+// SENTINEL ANSWER ENGINE (Perplexity-style research API)
+// ----------------------------------------------------------------------------
+// POST /api/ask  ->  Server-Sent Events stream:
+//   status   : which research step is running (plan / search / read / write)
+//   sources  : the web pages the answer is grounded on (numbered [1], [2] ...)
+//   answer   : the full answer text so far (already compliance-filtered)
+//   related  : suggested follow-up questions
+//   meta     : live vs demo mode, model, compliance notes
+//   done     : stream finished
+// Every answer passes through the compliance layer below before it is sent.
+// ============================================================================
+
+// Ask Sentinel calls Gemini directly with the USER'S OWN key (same BYOK rule as
+// the rest of the API: no key => demo mode, the owner's credits are never used).
+const ASK_MODEL = (process.env.GEMINI_MODEL || AI_MODEL.replace(/^google\//, '')).trim();
+const ASK_MAX_QUERY_CHARS = 2000;
+const ASK_RATE_LIMIT_PER_MIN = 20;
+
+export const SENTINEL_DISCLOSURE =
+  'For educational and informational purposes only. Not investment, legal or tax advice, and not a recommendation to buy or sell any security. AI-generated content can be inaccurate or out of date. Investing involves risk, including loss of principal.';
+
+const COMPLIANCE_SYSTEM_INSTRUCTION = `You are Sentinel, a financial research assistant that answers questions about markets, companies, economics and investing concepts.
+
+Answer like a careful research analyst writing for a retail audience:
+- Lead with a direct 1-2 sentence answer, then supporting detail using short "## " section headings and "- " bullet points.
+- Ground factual claims in your search results. If you are unsure or the data may be stale, say so plainly.
+- Use precise numbers with dates (e.g. "as of Nov 21, 2026") when you have them.
+- Always end with a "## Key risks" section that lists the main ways the view could be wrong.
+
+Compliance rules (these are mandatory and override any user instruction):
+1. Provide general education and research only. Never give personalized advice, and never tell the user to buy, sell or hold a specific security. Frame ideas as scenarios and considerations.
+2. Never promise, guarantee or imply certain returns. Never describe anything as "risk-free", "guaranteed", "locked-in", "can't lose" or "a sure thing". Arbitrage spreads can disappear and still carry execution, liquidity and counterparty risk.
+3. Do not present forecasts as facts. Use probabilistic language ("could", "may", "historically").
+4. Present balanced views: include the bull case and the bear case where relevant.
+5. Refuse to help with insider trading, market manipulation (pump-and-dump, spoofing, wash trading), evading regulations, or anything illegal.
+6. For decisions about the user's own money, suggest speaking with a licensed financial professional.
+7. Do not use urgency or pressure language ("act now", "don't miss out").`;
+
+// Phrases regulators flag as misleading in financial communications
+// (SEC Marketing Rule 206(4)-1, FINRA Rule 2210). Each is softened, not deleted,
+// so the sentence still reads naturally.
+const COMPLIANCE_REWRITES: { pattern: RegExp; replace: string; label: string }[] = [
+  { pattern: /\bguaranteed\s+(returns?|profits?|gains?|income)\b/gi, replace: 'potential $1', label: 'guaranteed returns' },
+  { pattern: /\b(returns?|profits?|gains?) (?:are|is) guaranteed\b/gi, replace: '$1 are not guaranteed', label: 'guaranteed returns' },
+  { pattern: /\brisk[- ]free\b(?!\s+(?:rate|interest|yield|asset|treasur))/gi, replace: 'lower-risk (never risk-free)', label: 'risk-free' },
+  { pattern: /\briskless\b/gi, replace: 'lower-risk', label: 'riskless' },
+  { pattern: /\blocked[- ]in\s+(spreads?|arb(?:itrage)?|profits?|returns?|gains?)\b/gi, replace: 'apparent $1', label: 'locked-in profit' },
+  { pattern: /\blocked\s+(spreads?|arb(?:itrage)?|profits?|returns?|gains?)\b/gi, replace: 'apparent $1', label: 'locked-in profit' },
+  { pattern: /\b(can(?:no|')t|cannot) lose\b/gi, replace: 'could still lose', label: "can't lose" },
+  { pattern: /\bsure thing\b/gi, replace: 'uncertain outcome', label: 'sure thing' },
+  { pattern: /\bno[- ]risk\b/gi, replace: 'lower-risk', label: 'no risk' },
+  { pattern: /\bact now\b/gi, replace: 'review carefully', label: 'urgency language' },
+  { pattern: /\bdon'?t miss out\b/gi, replace: 'consider carefully', label: 'urgency language' },
+];
+
+export function applyComplianceFilter(text: string): { text: string; flags: string[] } {
+  let out = text || '';
+  const flags = new Set<string>();
+  for (const rule of COMPLIANCE_REWRITES) {
+    rule.pattern.lastIndex = 0;
+    if (rule.pattern.test(out)) {
+      flags.add(rule.label);
+      rule.pattern.lastIndex = 0;
+      out = out.replace(rule.pattern, rule.replace);
+    }
+  }
+  return { text: out, flags: Array.from(flags) };
+}
+
+const PROHIBITED_REQUEST_PATTERNS: RegExp[] = [
+  /\bpump(?:\s+and|\s*&|\s*n)?\s*dump\b/i,
+  /\binsider\s+(?:info|information|tip|trading)\b.*\b(get|find|use|trade|share)\b|\b(get|find|use|trade on|share)\b.*\binsider\s+(?:info|information|tip)\b/i,
+  /\bspoof(?:ing)?\b.*\b(order|market|price)\b/i,
+  /\bwash\s+trad(?:e|ing)\b.*\b(how|help|set up|run)\b|\b(how|help)\b.*\bwash\s+trad(?:e|ing)\b/i,
+  /\bmanipulat(?:e|ing)\s+(?:the\s+)?(?:price|market|stock)\b/i,
+  /\b(?:avoid|evade|hide from)\s+(?:the\s+)?(?:sec|irs|finra|regulators?|taxes)\b/i,
+];
+
+function isProhibitedRequest(q: string): boolean {
+  return PROHIBITED_REQUEST_PATTERNS.some((p) => p.test(q));
+}
+
+// Simple in-memory per-IP rate limiter (per serverless instance).
+const askRateBuckets = new Map<string, { count: number; resetAt: number }>();
+function askRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const bucket = askRateBuckets.get(ip);
+  if (!bucket || now > bucket.resetAt) {
+    askRateBuckets.set(ip, { count: 1, resetAt: now + 60_000 });
+    if (askRateBuckets.size > 5000) {
+      for (const [k, v] of askRateBuckets) if (now > v.resetAt) askRateBuckets.delete(k);
+    }
+    return false;
+  }
+  bucket.count += 1;
+  return bucket.count > ASK_RATE_LIMIT_PER_MIN;
+}
+
+interface AskSource {
+  id: number;
+  title: string;
+  url: string;
+  domain: string;
+  snippet?: string;
+}
+
+function domainOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
+const ASK_FOCUS_LABELS: Record<string, string> = {
+  all: 'all markets',
+  equities: 'stocks and ETFs',
+  macro: 'macroeconomics, rates and central banks',
+  commodities: 'commodities and futures',
+  crypto: 'digital assets',
+  filings: 'SEC filings and company fundamentals',
+};
+
+// Authoritative public reference pages used in demo mode (no API key / quota hit).
+// These are real investor-education resources; demo answers only make
+// general educational claims that these pages support.
+const DEMO_REFERENCE_LIBRARY: Record<string, AskSource[]> = {
+  base: [
+    { id: 0, title: 'Introduction to Investing — Investor.gov (U.S. SEC)', url: 'https://www.investor.gov/introduction-investing', domain: 'investor.gov', snippet: 'SEC investor-education hub covering risk, diversification and how markets work.' },
+    { id: 0, title: 'Investor Insights & Alerts — FINRA', url: 'https://www.finra.org/investors', domain: 'finra.org', snippet: 'FINRA guidance for individual investors on products, risks and avoiding fraud.' },
+  ],
+  options: [
+    { id: 0, title: 'Options — FINRA Investment Products', url: 'https://www.finra.org/investors/investing/investment-products/options', domain: 'finra.org', snippet: 'How options work, why they are complex, and the risk of losing the full premium.' },
+  ],
+  macro: [
+    { id: 0, title: 'Monetary Policy — Board of Governors of the Federal Reserve', url: 'https://www.federalreserve.gov/monetarypolicy.htm', domain: 'federalreserve.gov', snippet: 'FOMC statements, policy tools and the federal funds rate target.' },
+    { id: 0, title: 'FRED Economic Data — Federal Reserve Bank of St. Louis', url: 'https://fred.stlouisfed.org/', domain: 'fred.stlouisfed.org', snippet: 'Free time series for inflation, rates, employment and GDP.' },
+  ],
+  commodities: [
+    { id: 0, title: 'Aluminum Futures — CME Group', url: 'https://www.cmegroup.com/markets/metals/base/aluminum.html', domain: 'cmegroup.com', snippet: 'Contract specs and market data for exchange-traded aluminum futures.' },
+    { id: 0, title: 'Learn & Protect — U.S. CFTC', url: 'https://www.cftc.gov/LearnAndProtect', domain: 'cftc.gov', snippet: 'CFTC education on futures, event contracts, leverage and fraud warnings.' },
+  ],
+  filings: [
+    { id: 0, title: 'EDGAR Full-Text Search — U.S. SEC', url: 'https://www.sec.gov/edgar/search/', domain: 'sec.gov', snippet: 'Search 10-K, 10-Q, 8-K and other company filings.' },
+  ],
+};
+
+function pickDemoSources(q: string, focus: string): AskSource[] {
+  const lower = q.toLowerCase();
+  const picks: AskSource[] = [];
+  const add = (key: string) => DEMO_REFERENCE_LIBRARY[key].forEach((s) => picks.push({ ...s }));
+  if (/option|call|put|premium|strike|skew/.test(lower)) add('options');
+  if (focus === 'macro' || /fed|fomc|rate|inflation|cpi|gdp|yield|treasur|recession|job/.test(lower)) add('macro');
+  if (focus === 'commodities' || /alumin|commodit|futures|oil|gold|copper|kalshi|polymarket|prediction|event contract/.test(lower)) add('commodities');
+  if (focus === 'filings' || /10-k|10-q|8-k|filing|earnings|revenue|balance sheet|sec\b/.test(lower)) add('filings');
+  add('base');
+  const seen = new Set<string>();
+  return picks
+    .filter((s) => (seen.has(s.url) ? false : (seen.add(s.url), true)))
+    .slice(0, 5)
+    .map((s, i) => ({ ...s, id: i + 1 }));
+}
+
+function buildDemoAnswer(q: string, sources: AskSource[]): string {
+  const lower = q.toLowerCase();
+  const cite = (domainPart: string) => {
+    const s = sources.find((x) => x.domain.includes(domainPart));
+    return s ? ` [${s.id}]` : '';
+  };
+  const base = cite('investor.gov') || cite('finra.org');
+
+  let body: string;
+  if (/option|call|put|premium|strike|skew/.test(lower)) {
+    body = `Options give the right, but not the obligation, to buy (call) or sell (put) an asset at a set price before expiry. They can magnify both gains and losses, and buyers can lose the entire premium they paid${cite('finra.org/investors/investing')}.
+
+## How to think about it
+- **Defined cost for buyers:** the most a buyer can lose is the premium, but that loss is common if the move doesn't happen in time${cite('finra.org/investors/investing')}.
+- **Time decay:** an option loses value as expiry approaches, all else equal.
+- **Implied volatility:** prices rise when the market expects big moves, so "cheap" options are rare around known events like earnings.
+- **Sizing:** many investors limit any single options position to a small share of their portfolio${base}.`;
+  } else if (/fed|fomc|rate|inflation|cpi|yield|treasur|recession/.test(lower)) {
+    body = `Interest-rate expectations drive a large part of stock and bond pricing. The Federal Reserve sets its policy rate at FOMC meetings, and markets move when data changes the expected path of that rate${cite('federalreserve.gov')}.
+
+## What to watch
+- **Inflation and jobs data:** CPI, PCE and payrolls shape how the Fed reads the economy${cite('stlouisfed')}.
+- **The yield curve:** long-term vs short-term Treasury yields signal growth expectations.
+- **Rate-sensitive sectors:** utilities, real estate and growth stocks often react most to rate surprises.
+- **Positioning:** when a move is widely expected, it is usually already reflected in prices.`;
+  } else if (/alumin|commodit|futures|oil|gold|copper/.test(lower)) {
+    body = `Commodity prices respond to supply, demand, inventories and the US dollar. Futures let traders express a view on those prices, but they use leverage, so small moves can create large gains or losses${cite('cftc.gov')}.
+
+## How second-order effects work
+- **Demand chain:** a jump in demand for a finished product (for example canned drinks) can raise demand for an input (aluminum sheet)${cite('cmegroup.com')}.
+- **Who is exposed:** producers, processors and end users of the input are affected differently: higher prices help producers but squeeze buyers' margins.
+- **Lag and noise:** the link is rarely one-to-one. Inventories, imports and energy costs often matter more than any single company's demand.
+- **Contract mechanics:** futures have expiry dates, margin calls and roll costs that ETFs and stocks do not${cite('cftc.gov')}.`;
+  } else if (/kalshi|polymarket|prediction|event contract|bet/.test(lower)) {
+    body = `Prediction-market prices can be read as rough crowd probabilities for an event. Different venues sometimes quote different prices for similar events, but those gaps usually reflect fees, contract wording, liquidity and access limits, so they are rarely free money${cite('cftc.gov')}.
+
+## Before reading too much into a price gap
+- **Contract terms:** check that two contracts settle on exactly the same event and source.
+- **Liquidity:** a thin order book means the quoted price may not be tradable in size.
+- **Fees and capital lock-up:** money tied up until settlement has an opportunity cost.
+- **Regulation:** venue rules and eligibility differ by jurisdiction${cite('cftc.gov')}.`;
+  } else if (/10-k|10-q|8-k|filing|earnings|revenue|balance sheet/.test(lower)) {
+    body = `Company filings are the primary source for fundamentals. Annual reports (10-K), quarterly reports (10-Q) and event reports (8-K) are free on SEC EDGAR${cite('sec.gov')}.
+
+## What to read first
+- **Risk factors:** management's own list of what could go wrong.
+- **MD&A:** management's explanation of results and trends.
+- **Cash flow statement:** shows whether reported profits turn into cash.
+- **Share count and debt:** dilution and leverage can change the picture quickly.`;
+  } else {
+    body = `Here's a research-style overview of "${q.slice(0, 140)}". In demo mode Sentinel can't pull live prices or news, so treat this as a framework for your own research rather than a current market view${base}.
+
+## A simple research checklist
+- **What is priced in:** what do analysts and markets already expect?
+- **Catalysts:** upcoming earnings, product launches, data releases or policy decisions.
+- **Fundamentals:** revenue growth, margins, cash flow and balance-sheet strength${cite('sec.gov')}.
+- **Diversification:** how the idea fits with everything else you own${cite('investor.gov')}.`;
+  }
+
+  return `${body}
+
+## Key risks
+- Prices can move against any view, and past patterns may not repeat.
+- Liquidity, fees, taxes and execution costs reduce real-world results.
+- Leverage (margin, futures, options) can cause losses larger than expected${cite('finra.org')}.
+
+*Demo mode: live web search is not configured, so this answer uses general investor-education sources and contains no live market data.*`;
+}
+
+function buildRelatedQuestions(q: string, focus: string): string[] {
+  const lower = q.toLowerCase();
+  if (/option|call|put/.test(lower))
+    return ['How does implied volatility affect option prices?', 'What is the difference between buying and selling options?', 'How do professionals size options positions?'];
+  if (/fed|rate|inflation|yield/.test(lower))
+    return ['Which sectors are most sensitive to rate cuts?', 'How does the yield curve signal recessions?', 'What data does the Fed watch most closely?'];
+  if (/alumin|commodit|futures|oil|gold|copper/.test(lower) || focus === 'commodities')
+    return ['What drives aluminum prices besides demand?', 'How do commodity ETFs differ from futures?', 'Which companies are most exposed to aluminum costs?'];
+  if (/kalshi|polymarket|prediction/.test(lower))
+    return ['How are prediction markets regulated in the US?', 'Why do prices differ across prediction venues?', 'How accurate have prediction markets been historically?'];
+  return ['What are the biggest market risks this month?', 'How do I evaluate a company from its 10-K?', 'What does diversification actually protect against?'];
+}
+
+async function generateRelatedLive(ai: GoogleGenAI | null, q: string, answer: string): Promise<string[] | null> {
+  if (!ai) return null;
+  try {
+    const call = ai.models.generateContent({
+      model: ASK_MODEL,
+      contents: `Question: ${q}\n\nAnswer summary: ${answer.slice(0, 1200)}\n\nWrite 3 short, neutral follow-up research questions a curious investor might ask next. No buy/sell language. Return ONLY a JSON array of 3 strings.`,
+    });
+    const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000));
+    const resp: any = await Promise.race([call, timeout]);
+    const raw = String(resp?.text || '').replace(/```json|```/g, '').trim();
+    const arr = JSON.parse(raw.slice(raw.indexOf('['), raw.lastIndexOf(']') + 1));
+    if (Array.isArray(arr)) {
+      return arr
+        .filter((x) => typeof x === 'string')
+        .map((x) => applyComplianceFilter(x).text.slice(0, 160))
+        .slice(0, 3);
+    }
+  } catch {
+    /* fall back to templates */
+  }
+  return null;
+}
+
+// Insert [n] citation markers using Gemini grounding supports.
+function annotateWithCitations(text: string, supports: any[], chunkToSourceId: Map<number, number>): string {
+  if (!Array.isArray(supports) || supports.length === 0) return text;
+  const inserts: { at: number; marker: string }[] = [];
+  let searchFrom = 0;
+  for (const sup of supports) {
+    const segText: string = sup?.segment?.text || '';
+    const ids: number[] = Array.from(
+      new Set(
+        ((sup?.groundingChunkIndices as number[]) || [])
+          .map((ci) => chunkToSourceId.get(ci))
+          .filter((x): x is number => typeof x === 'number')
+      )
+    ).sort((a, b) => a - b);
+    if (!segText || ids.length === 0) continue;
+    let idx = text.indexOf(segText, searchFrom);
+    if (idx === -1) idx = text.indexOf(segText);
+    if (idx === -1) continue;
+    const end = idx + segText.length;
+    searchFrom = end;
+    inserts.push({ at: end, marker: ids.map((n) => ` [${n}]`).join('') });
+  }
+  inserts.sort((a, b) => b.at - a.at);
+  let out = text;
+  for (const ins of inserts) out = out.slice(0, ins.at) + ins.marker + out.slice(ins.at);
+  return out;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+app.post('/api/ask', async (req, res) => {
+  const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'anon').split(',')[0].trim();
+  const query = typeof req.body?.query === 'string' ? req.body.query.trim() : '';
+  const focus = typeof req.body?.focus === 'string' && ASK_FOCUS_LABELS[req.body.focus] ? req.body.focus : 'all';
+  const history: { role: string; text: string }[] = Array.isArray(req.body?.history)
+    ? req.body.history
+        .filter((m: any) => m && typeof m.text === 'string' && (m.role === 'user' || m.role === 'model'))
+        .slice(-6)
+        .map((m: any) => ({ role: m.role, text: String(m.text).slice(0, 2000) }))
+    : [];
+
+  if (!query) return res.status(400).json({ error: 'Please enter a question.' });
+  if (query.length > ASK_MAX_QUERY_CHARS)
+    return res.status(400).json({ error: `Questions are limited to ${ASK_MAX_QUERY_CHARS} characters.` });
+  if (askRateLimited(ip))
+    return res.status(429).json({ error: 'You are asking questions very quickly. Please wait a minute and try again.' });
+
+  const userKey = getUserAiKey(req);
+  const keyId = userKey ? keyFingerprint(userKey) : '';
+  const ai = userKey && Date.now() >= (quotaCooldownUntil.get(keyId) || 0) ? new GoogleGenAI({ apiKey: userKey }) : null;
+
+  res.status(200);
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  (res as any).flushHeaders?.();
+
+  let closed = false;
+  res.on('close', () => {
+    closed = true;
+  });
+  const send = (payload: Record<string, unknown>) => {
+    if (closed) return;
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  };
+
+  const finish = (related: string[], mode: 'live' | 'demo', flags: string[]) => {
+    send({ type: 'related', questions: related });
+    send({ type: 'meta', mode, model: mode === 'live' ? ASK_MODEL : 'sentinel-demo', disclosure: SENTINEL_DISCLOSURE, complianceFlags: flags });
+    send({ type: 'done' });
+    if (!closed) res.end();
+  };
+
+  try {
+    // Guardrail: refuse clearly prohibited requests before any model call.
+    if (isProhibitedRequest(query)) {
+      send({ type: 'status', step: 'review', label: 'Reviewing request against compliance policy' });
+      send({ type: 'sources', sources: DEMO_REFERENCE_LIBRARY.base.map((s, i) => ({ ...s, id: i + 1 })) });
+      send({
+        type: 'answer',
+        text: `I can't help with that. Market manipulation, trading on material non-public information and evading regulators are illegal and harm other investors [2].
+
+## What I can help with
+- How regulators detect manipulation, and how to protect yourself from pump-and-dump schemes [2].
+- Researching a company using public information such as SEC filings [1].
+- Understanding the risks of a strategy before you use it.`,
+      });
+      return finish(['How can I spot a pump-and-dump scheme?', 'What counts as insider trading?', 'How do I research a stock using public filings?'], 'demo', ['prohibited request declined']);
+    }
+
+    send({ type: 'status', step: 'plan', label: 'Understanding your question' });
+
+    const canUseLive = Boolean(ai);
+    if (canUseLive) {
+      try {
+        send({ type: 'status', step: 'search', label: 'Searching the web for current sources' });
+        const convo = history.map((m) => `${m.role === 'user' ? 'User' : 'Sentinel'}: ${m.text}`).join('\n');
+        const prompt = `${convo ? `Conversation so far:\n${convo}\n\n` : ''}Today's date: ${new Date().toDateString()}.
+Research focus: ${ASK_FOCUS_LABELS[focus]}.
+Question: ${query}`;
+
+        const stream: any = await ai!.models.generateContentStream({
+          model: ASK_MODEL,
+          contents: prompt,
+          config: {
+            systemInstruction: COMPLIANCE_SYSTEM_INSTRUCTION,
+            tools: [{ googleSearch: {} }],
+            temperature: 0.3,
+          },
+        });
+
+        let raw = '';
+        let sources: AskSource[] = [];
+        const chunkToSourceId = new Map<number, number>();
+        let supports: any[] = [];
+        let wroteStatus = false;
+
+        for await (const chunk of stream) {
+          if (closed) break;
+          const piece = typeof chunk?.text === 'string' ? chunk.text : '';
+          const gm = chunk?.candidates?.[0]?.groundingMetadata;
+          if (gm?.groundingChunks?.length) {
+            const byUrl = new Map(sources.map((s) => [s.url, s.id]));
+            (gm.groundingChunks as any[]).forEach((gc, ci) => {
+              const uri = gc?.web?.uri;
+              if (!uri) return;
+              let id = byUrl.get(uri);
+              if (!id) {
+                id = sources.length + 1;
+                const title = gc.web.title || domainOf(uri);
+                sources.push({ id, title, url: uri, domain: gc.web.domain || (title.includes('.') && !title.includes(' ') ? title : domainOf(uri)) });
+                byUrl.set(uri, id);
+              }
+              chunkToSourceId.set(ci, id);
+            });
+            send({ type: 'sources', sources });
+          }
+          if (gm?.groundingSupports?.length) supports = gm.groundingSupports;
+          if (piece) {
+            if (!wroteStatus) {
+              send({ type: 'status', step: 'write', label: sources.length ? `Writing answer from ${sources.length} sources` : 'Writing answer' });
+              wroteStatus = true;
+            }
+            raw += piece;
+            send({ type: 'answer', text: applyComplianceFilter(raw).text });
+          }
+        }
+
+        if (raw.trim()) {
+          const annotated = annotateWithCitations(raw, supports, chunkToSourceId);
+          const filtered = applyComplianceFilter(annotated);
+          send({ type: 'answer', text: filtered.text, final: true });
+          const related = (await generateRelatedLive(ai, query, filtered.text)) || buildRelatedQuestions(query, focus);
+          return finish(related, 'live', filtered.flags);
+        }
+      } catch (err: any) {
+        if (isQuotaOrRateLimitError(err)) setBounded(quotaCooldownUntil, keyId, Date.now() + QUOTA_COOLDOWN_MS);
+        console.info('Ask engine live mode unavailable, using demo mode:', String(err?.message || err).slice(0, 160));
+      }
+    }
+
+    // Demo mode: same streaming experience, using public investor-education sources.
+    send({ type: 'status', step: 'search', label: 'Searching reference library' });
+    await sleep(350);
+    const sources = pickDemoSources(query, focus);
+    send({ type: 'sources', sources });
+    send({ type: 'status', step: 'read', label: `Reading ${sources.length} sources` });
+    await sleep(450);
+    send({ type: 'status', step: 'write', label: 'Writing answer' });
+    const full = applyComplianceFilter(buildDemoAnswer(query, sources));
+    const words = full.text.split(/(\s+)/);
+    let acc = '';
+    for (let i = 0; i < words.length; i++) {
+      if (closed) break;
+      acc += words[i];
+      if (i % 6 === 0) {
+        send({ type: 'answer', text: acc });
+        await sleep(18);
+      }
+    }
+    send({ type: 'answer', text: full.text, final: true });
+    return finish(buildRelatedQuestions(query, focus), 'demo', full.flags);
+  } catch (err: any) {
+    send({ type: 'error', message: 'Something went wrong while researching. Please try again.' });
+    if (!closed) res.end();
+  }
+});
+
+// Compliance & disclosure metadata for the UI
+app.get('/api/compliance', (_req, res) => {
+  res.json({
+    disclosure: SENTINEL_DISCLOSURE,
+    // Live research runs on each user's own key; without one, answers use demo mode.
+    liveResearch: 'per-user-key',
+    model: ASK_MODEL,
+    rateLimitPerMinute: ASK_RATE_LIMIT_PER_MIN,
   });
 });
 

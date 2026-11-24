@@ -370,7 +370,7 @@ export const Arbitrage100Grid: React.FC<Arbitrage100GridProps> = ({
                   ) : (
                     <>
                       <span className="w-1.5 h-1.5 rounded-full bg-current animate-ping"></span>
-                      ACT NOW ({currentScale}x)
+                      Paper trade ({currentScale}x)
                     </>
                   )}
                 </button>
