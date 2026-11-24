@@ -10,6 +10,8 @@ import {
 import { UserProfile } from '../services/authService';
 import { getPlan } from '../config/plans';
 import { WelcomeCard } from './WelcomeCard';
+import { AiKeyModal } from './AiKeyModal';
+import { getAiKey, onAiKeyChange } from '../services/aiKeyService';
 import {
   MarketReport,
   AppView,
@@ -87,6 +89,11 @@ interface AppShellProps {
 
 export const AppShell: React.FC<AppShellProps> = ({ user, onSignOut }) => {
   const plan = getPlan(user.plan);
+
+  // Bring-your-own-key AI: each user adds their own Gemini key (stored only in their browser).
+  const [isAiKeyModalOpen, setIsAiKeyModalOpen] = useState(false);
+  const [hasAiKey, setHasAiKey] = useState<boolean>(Boolean(getAiKey()));
+  useEffect(() => onAiKeyChange(() => setHasAiKey(Boolean(getAiKey()))), []);
   const [report, setReport] = useState<MarketReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<AppView>(AppView.DASHBOARD);
@@ -264,6 +271,13 @@ export const AppShell: React.FC<AppShellProps> = ({ user, onSignOut }) => {
     onSignOut();
   };
 
+  // After the key is added/removed, reload the analysis so the dashboard switches modes.
+  const refreshAfterKeyChange = () => {
+    fetchMarketAnalysis()
+      .then((fresh) => setReport(fresh))
+      .catch((err) => console.error(err));
+  };
+
   if (loading) {
     return <LoadingScreen />;
   }
@@ -399,6 +413,20 @@ export const AppShell: React.FC<AppShellProps> = ({ user, onSignOut }) => {
               ✦ Strategy Wizard
             </button>
 
+            <button
+              type="button"
+              onClick={() => setIsAiKeyModalOpen(true)}
+              title={hasAiKey ? 'Live AI is running on your own Gemini key' : 'Add your Gemini key to turn on live AI'}
+              className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
+                hasAiKey
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${hasAiKey ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+              {hasAiKey ? 'AI: your key' : 'AI key'}
+            </button>
+
             <div className="hidden sm:flex items-center gap-2">
               <div className="text-right max-w-[150px]">
                 <div className="text-xs font-semibold text-slate-900 truncate">{user.fullName}</div>
@@ -513,6 +541,19 @@ export const AppShell: React.FC<AppShellProps> = ({ user, onSignOut }) => {
         </div>
       )}
 
+      {/* AI status notice (sample data / key problems) */}
+      {report.aiNotice && (
+        <div
+          role="status"
+          className="bg-amber-50 border-b border-amber-200 py-2 px-4 text-center text-xs text-amber-900 flex flex-wrap items-center justify-center gap-x-3 gap-y-1"
+        >
+          <span>{report.aiNotice}</span>
+          <button type="button" onClick={() => setIsAiKeyModalOpen(true)} className="font-semibold underline hover:text-amber-950">
+            {hasAiKey ? 'Check my key' : 'Add my key'}
+          </button>
+        </div>
+      )}
+
       {/* Running Headline Ticker */}
       <NewsTicker news={report.newsFeed} />
 
@@ -612,6 +653,7 @@ export const AppShell: React.FC<AppShellProps> = ({ user, onSignOut }) => {
 
       <PaperTradeConfirm trade={paperTrade} onCancel={() => setPaperTrade(null)} onConfirm={confirmPaperTrade} />
       <DisclosuresModal isOpen={disclosuresOpen} onClose={() => setDisclosuresOpen(false)} />
+      <AiKeyModal isOpen={isAiKeyModalOpen} onClose={() => setIsAiKeyModalOpen(false)} onChanged={refreshAfterKeyChange} />
       <RiskAcknowledgementGate onOpenDisclosures={() => setDisclosuresOpen(true)} />
 
       {/* 4-Step Hypothesis, Trading Philosophy & Goals Wizard Modal */}

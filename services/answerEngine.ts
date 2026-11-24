@@ -1,6 +1,7 @@
 // Client for the Sentinel answer engine (/api/ask).
 // Reads the Server-Sent Events stream and calls a handler for each event,
 // so the UI can show research steps, sources and the answer as they arrive.
+import { aiKeyHeaders } from './aiKeyService';
 
 export type ResearchFocus = 'all' | 'equities' | 'macro' | 'commodities' | 'crypto' | 'filings';
 
@@ -40,7 +41,7 @@ export async function streamAnswer(
 ): Promise<void> {
   const response = await fetch('/api/ask', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...aiKeyHeaders() },
     body: JSON.stringify(request),
     signal,
   });
