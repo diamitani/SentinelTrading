@@ -53,6 +53,7 @@ export interface TradeRecommendation {
   targetReturnPct?: number;
   marketCategory?: MarketCategoryType;
   predictionOddsSpread?: string;
+  url?: string;
 }
 
 export interface MarketTrend {
@@ -420,11 +421,77 @@ export interface MarketReport {
   totalArbitrageTradesCount?: number;
   criticalUrgencyTradesCount?: number;
   averageArbitrageSpreadPct?: number;
-  // Multi-Feed Omnichannel Signals
+  // Multi-Feed Omnichannel Signals & Live Public APIs
   omnichannelNodes?: OmnichannelStreamNode[];
   secondOrderChains?: SecondOrderCommodityChain[];
+  treasuryRates?: LiveTreasuryRate[];
+  polymarkets?: LivePolymarketContract[];
+  liveFeedStats?: {
+    fetchedAt: string;
+    storiesCount: number;
+    activeSourcesSucceeded: number;
+    totalCatalogSources: number;
+    categoryCounts: Record<string, number>;
+  };
   aiMode?: 'live' | 'cached-live' | 'quant-synthesis';
   aiNotice?: string;
+}
+
+export interface FinancialSourceDef {
+  id: string;
+  rank: number;
+  name: string;
+  category: string;
+  type: 'RSS' | 'ATOM' | 'PUBLIC_API' | 'NEWS_WIRE';
+  url: string;
+  homeUrl: string;
+  activePoll?: boolean;
+}
+
+export interface LiveNewsStory {
+  id: string;
+  title: string;
+  summary: string;
+  source: string;
+  category: string;
+  url: string;
+  publishedAt: string;
+  publishedIso: string;
+  domain: string;
+  leadType: string;
+}
+
+export interface LiveTreasuryRate {
+  securityDesc: string;
+  avgInterestRateAmt: number;
+  recordDate: string;
+}
+
+export interface LivePolymarketContract {
+  id: string;
+  question: string;
+  slug: string;
+  url: string;
+  yesPrice: number;
+  noPrice: number;
+  volume24hr: number;
+  liquidity: number;
+  endDate?: string;
+}
+
+export interface LiveFeedsResponse {
+  fetchedAt: string;
+  stories: LiveNewsStory[];
+  totalStories: number;
+  quotes: Record<string, { symbol: string; name: string; price: number; changePct: number; currency: string; category: string }>;
+  sectorEtfs: Array<{ sector: string; symbol: string; performance: number; price: number }>;
+  treasuryRates: LiveTreasuryRate[];
+  polymarkets: LivePolymarketContract[];
+  secFilings: LiveNewsStory[];
+  activeSourcesSucceeded: number;
+  totalCatalogSources: number;
+  categoryCounts: Record<string, number>;
+  catalog: FinancialSourceDef[];
 }
 
 export interface ChatMessage {

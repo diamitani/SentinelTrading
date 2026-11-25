@@ -1,287 +1,618 @@
-import React, { useState } from 'react';
-import { OmnichannelStreamNode, SecondOrderCommodityChain } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  OmnichannelStreamNode,
+  SecondOrderCommodityChain,
+  LiveFeedsResponse,
+} from '../types';
+import { ResearchFocus } from '../services/answerEngine';
+import { fetchLiveFeeds } from '../services/geminiService';
+import {
+  RefreshCw,
+  Search,
+  ExternalLink,
+  Sparkles,
+  Landmark,
+  BarChart3,
+  FileText,
+  Globe2,
+  ChevronDown,
+  ChevronUp,
+  ArrowRight,
+  Send,
+} from 'lucide-react';
 
 interface OmnichannelHypothesisViewProps {
   nodes?: OmnichannelStreamNode[];
   chains?: SecondOrderCommodityChain[];
-  onDeployHypothesis: (thesisPrompt: string) => Promise<void>;
+  onAsk?: (query: string, focus: ResearchFocus) => void;
+  onDeployHypothesis: (hypothesisPrompt: string) => Promise<void>;
   isDeploying: boolean;
 }
 
+const CATEGORIES = [
+  'All',
+  'Equities & Trading',
+  'VC, PE & Deal Rooms',
+  'Fed, Gov Bonds & Macro',
+  'Real Estate & REITs',
+  'Cybersecurity & Risk',
+  'AI & Tech Markets',
+  'Portfolios & Quant',
+  'Prediction & Digital Assets',
+];
+
+function focusForCategory(cat: string): ResearchFocus {
+  if (cat.includes('Fed') || cat.includes('Macro')) return 'macro';
+  if (cat.includes('Prediction') || cat.includes('Digital')) return 'crypto';
+  if (cat.includes('Equities') || cat.includes('Portfolios')) return 'equities';
+  if (cat.includes('VC')) return 'filings';
+  return 'all';
+}
+
+function formatStoryTime(iso: string): string {
+  const ts = new Date(iso).getTime();
+  if (Number.isNaN(ts)) return 'Recent';
+  const mins = Math.max(1, Math.floor((Date.now() - ts) / 60000));
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
 export const OmnichannelHypothesisView: React.FC<OmnichannelHypothesisViewProps> = ({
-  nodes,
-  chains,
+  chains = [],
+  onAsk,
   onDeployHypothesis,
   isDeploying,
 }) => {
-  const [customEventPrompt, setCustomEventPrompt] = useState<string>('');
-  const [selectedChainIndex, setSelectedChainIndex] = useState<number | null>(null);
+  const [liveData, setLiveData] = useState<LiveFeedsResponse | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const defaultNodes: OmnichannelStreamNode[] = nodes || [
-    {
-      id: 'feed_x_firehose',
-      channel: 'X / Twitter',
-      activeSignalsCount: 248900,
-      velocityScore: 94,
-      sampleSignal: 'Elon Musk automotive M&A rumors surging +620% in verified tech circles.',
-      sentimentBias: 'BULLISH',
-      lastPing: 'Live Stream 12ms',
-    },
-    {
-      id: 'feed_reddit_wsb',
-      channel: 'Reddit WallStreetBets',
-      activeSignalsCount: 84200,
-      velocityScore: 88,
-      sampleSignal: 'Call option skew on Alcoa (AA) & Century Aluminum (CENX) post Pepsi packaging volume spike.',
-      sentimentBias: 'BULLISH',
-      lastPing: 'Live Stream 24ms',
-    },
-    {
-      id: 'feed_google_trends',
-      channel: 'Google Trends',
-      activeSignalsCount: 1420000,
-      velocityScore: 96,
-      sampleSignal: 'Breakout query velocity on "aluminum can supply shortage" and "Rivian acquisition".',
-      sentimentBias: 'DISLOCATION',
-      lastPing: 'Real-time API',
-    },
-    {
-      id: 'feed_quora_tech',
-      channel: 'Quora & Tech Forums',
-      activeSignalsCount: 31200,
-      velocityScore: 72,
-      sampleSignal: 'Engineering analyses debating feasibility of EV platform consolidation and battery pack IP sharing.',
-      sentimentBias: 'BULLISH',
-      lastPing: 'Live Wire',
-    },
-    {
-      id: 'feed_meta_groups',
-      channel: 'Facebook / Meta Groups',
-      activeSignalsCount: 45000,
-      velocityScore: 68,
-      sampleSignal: 'Institutional logistics and beverage canning supply chain distributor reports.',
-      sentimentBias: 'BULLISH',
-      lastPing: 'Stream Sync',
-    },
-    {
-      id: 'feed_sec_edgar',
-      channel: 'SEC EDGAR Filings',
-      activeSignalsCount: 1240,
-      velocityScore: 91,
-      sampleSignal: 'Form 13F and 4 filings confirming hedge fund basis swaps in industrial materials.',
-      sentimentBias: 'DISLOCATION',
-      lastPing: 'Real-time Push',
-    },
-  ];
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [showAll100, setShowAll100] = useState<boolean>(false);
+  const [catalogCategory, setCatalogCategory] = useState<string>('All');
 
-  const defaultChains: SecondOrderCommodityChain[] = chains || [
-    {
-      primaryEvent: 'Pepsi Global Initiative: Aggressive Canned Beverage Sales Surge',
-      derivedHypothesis: 'Surging canned beverage volume creates supply strain in packaging grade sheet coil.',
-      impactedCommodity: 'CME Aluminum Futures (ALI=F) & Can Manufacturers (BALL, CCK)',
-      recommendedContract: 'CME Aluminum Dec $2,650 Calls / Long Ball Corp (BALL) 1.8x Scale',
-      expectedSpreadExpansion: '+3.4% Basis Dislocation',
-      confidence: 94,
-    },
-    {
-      primaryEvent: 'Elon Musk / X Speculation: Strategic Automotive Acquisition Directive',
-      derivedHypothesis: 'Market speculation shifts capital to discounted EV platforms with manufacturing scale.',
-      impactedCommodity: 'Rivian (RIVN), Lucid (LCID) Call Skew & Lithium Carbonate Basis',
-      recommendedContract: 'RIVN Oct $12.50 Calls & Synthetic Short S&P Auto Index Pair',
-      expectedSpreadExpansion: '+4.2% Cross-Exchange Spread',
-      confidence: 91,
-    },
-    {
-      primaryEvent: 'Hyperscale Datacenter Expansion: Next-Gen GPU Power Grid Contracts',
-      derivedHypothesis: 'Massive transmission lines drive raw industrial copper & nuclear fuel demand spike.',
-      impactedCommodity: 'Copper COMEX (HG=F) & Cameco Uranium (CCJ)',
-      recommendedContract: 'CME Copper Month-1 Long Basis / CCJ Conversion Box',
-      expectedSpreadExpansion: '+2.8% Spread Divergence',
-      confidence: 88,
-    },
-  ];
+  const [customHypothesis, setCustomHypothesis] = useState<string>('');
 
-  const handleExecuteChain = async (chain: SecondOrderCommodityChain, idx: number) => {
-    setSelectedChainIndex(idx);
-    const thesis = `${chain.primaryEvent}. Second-order impact: ${chain.derivedHypothesis}. Target commodities & equities: ${chain.impactedCommodity}. Execute ${chain.recommendedContract}.`;
-    await onDeployHypothesis(thesis);
+  const loadFeeds = async (forceRefresh = false) => {
+    if (forceRefresh) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchLiveFeeds(undefined, undefined, forceRefresh);
+      setLiveData(data);
+    } catch (e: any) {
+      setError(e?.message || 'Could not reach live financial feeds right now.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
-  const handleCustomSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    void loadFeeds(false);
+  }, []);
+
+  const filteredStories = useMemo(() => {
+    const stories = liveData?.stories || [];
+    const q = searchQuery.trim().toLowerCase();
+    return stories.filter((s) => {
+      if (selectedCategory !== 'All' && s.category !== selectedCategory) return false;
+      if (q) {
+        const hay = `${s.title} ${s.summary} ${s.source} ${s.category} ${(s.tickers || []).join(' ')}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [liveData, selectedCategory, searchQuery]);
+
+  const filteredCatalog = useMemo(() => {
+    const cat = liveData?.catalog || [];
+    const q = searchQuery.trim().toLowerCase();
+    return cat.filter((src) => {
+      if (catalogCategory !== 'All' && src.category !== catalogCategory) return false;
+      if (q) {
+        const hay = `${src.name} ${src.category} ${src.domain} ${src.protocol}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [liveData, catalogCategory, searchQuery]);
+
+  const handleDeploySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customEventPrompt.trim()) return;
-    await onDeployHypothesis(customEventPrompt);
+    if (!customHypothesis.trim()) return;
+    await onDeployHypothesis(customHypothesis.trim());
+    setCustomHypothesis('');
   };
 
   return (
-    <div className="space-y-8 animate-fade-in pb-12">
-      {/* Top Banner */}
-      <div className="bg-slate-50 border border-slate-200 p-6 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 bg-blue-600 rounded-full"></span>
-            <h2 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-              Omnichannel Ingest & Second-Order Commodity Engine
-            </h2>
+    <div className="space-y-6 pb-12">
+      {/* Header */}
+      <div className="bg-white border border-stone-200 rounded-xl p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <span className="text-[11px] font-mono uppercase tracking-wider font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
+              Live Open-Source Finance Wire
+            </span>
+            <span className="text-[11px] font-mono text-stone-500">
+              {liveData
+                ? `${liveData.totalStories} live stories · ${liveData.activeSourcesSucceeded} active feeds · ${liveData.totalCatalogSources} tracked platforms`
+                : 'Connecting to live financial feeds…'}
+            </span>
           </div>
-          <p className="text-xs text-slate-600 mt-1 max-w-3xl font-normal">
-            Ingests live unstructured intelligence across <span className="font-semibold text-slate-900">X (Twitter), Reddit, Google Trends, Quora, Meta Groups, SEC EDGAR, and Bloomberg</span>. Traces multi-market ripple effects—such as automotive OEM targets on M&A rumors, or aluminum commodity calls from beverage packaging surges.
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-stone-900">
+            Live Financial News, Leads &amp; Top 100 Sources
+          </h1>
+          <p className="text-sm text-stone-600 mt-1 max-w-3xl">
+            Real-time stories, filings, US Treasury bond rates, and Polymarket odds pulled live from PitchBook, Seeking Alpha, Dealroom, WSJ, Federal Reserve, HousingWire, CISA, MIT Tech Review, SEC EDGAR, and 90+ more open feeds.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 font-mono text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-          <span>7 LIVE CHANNELS SYNCED</span>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setShowAll100((v) => !v)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 text-xs font-semibold text-stone-800 transition-colors"
+          >
+            <Globe2 className="w-3.5 h-3.5 text-blue-600" />
+            {showAll100 ? 'Hide' : 'Browse'} All 100 Sources
+            {showAll100 ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => void loadFeeds(true)}
+            disabled={refreshing}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-stone-900 hover:bg-stone-800 text-white text-xs font-semibold transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Refreshing…' : 'Refresh Live Feeds'}
+          </button>
         </div>
       </div>
 
-      {/* 7 Stream Feed Cards */}
-      <div>
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest font-mono">
-            Omnichannel Live Data Nodes
-          </h3>
-          <span className="text-xs text-slate-500 font-mono">2,300,000+ SIGNALS INDEXED</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {defaultNodes.map((node) => (
-            <div key={node.id} className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs flex flex-col justify-between hover:border-slate-300 transition-colors">
-              <div>
-                <div className="flex justify-between items-start mb-2">
-                  <div className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-blue-600"></span>
-                    {node.channel}
-                  </div>
-                  <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-                    {node.sentimentBias}
-                  </span>
-                </div>
-
-                <p className="text-xs text-slate-600 leading-relaxed my-2 line-clamp-2">
-                  "{node.sampleSignal}"
-                </p>
-              </div>
-
-              <div className="border-t border-slate-100 pt-2.5 mt-2 flex justify-between items-center text-[11px] font-mono text-slate-500">
-                <span>Velocity: <strong className="text-slate-900">{node.velocityScore}/100</strong></span>
-                <span>{node.lastPing}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Second-Order Commodity & Ripple Hypotheses */}
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900 tracking-tight">
-              Second-Order Market & Commodity Dislocation Chains
-            </h3>
-            <p className="text-xs text-slate-500">
-              Select any pre-computed ripple hypothesis to price out multi-leg commodity calls, puts, and cross-venue arbitrage tickets.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {defaultChains.map((chain, idx) => (
-            <div
-              key={idx}
-              className={`p-5 rounded-xl border bg-white flex flex-col justify-between shadow-xs transition-all ${
-                selectedChainIndex === idx ? 'border-blue-600 ring-2 ring-blue-100' : 'border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div className="space-y-3">
-                <div className="text-[11px] font-mono text-blue-600 font-bold uppercase tracking-wider">
-                  Ripple Scenario 0{idx + 1}
-                </div>
-
-                <div>
-                  <div className="text-xs text-slate-400 uppercase font-mono font-semibold">Primary Event / Wire</div>
-                  <h4 className="text-sm font-bold text-slate-900 leading-snug mt-0.5">
-                    {chain.primaryEvent}
-                  </h4>
-                </div>
-
-                <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 space-y-2 text-xs">
-                  <div>
-                    <span className="text-slate-400 uppercase font-mono text-[10px] block">Derived Market Ripple</span>
-                    <span className="text-slate-700 leading-relaxed font-medium block mt-0.5">
-                      {chain.derivedHypothesis}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-slate-400 uppercase font-mono text-[10px] block">Impacted Commodity / Equities</span>
-                    <span className="text-slate-900 font-bold font-mono block mt-0.5">
-                      {chain.impactedCommodity}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-slate-400 uppercase font-mono text-[10px] block">Recommended Structure</span>
-                    <span className="text-blue-700 font-semibold font-mono block mt-0.5">
-                      {chain.recommendedContract}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-center text-xs font-mono">
-                  <span className="text-emerald-700 font-bold">{chain.expectedSpreadExpansion}</span>
-                  <span className="text-slate-500">Confidence: {chain.confidence}%</span>
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-slate-100 mt-4">
-                <button
-                  onClick={() => handleExecuteChain(chain, idx)}
-                  disabled={isDeploying}
-                  className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold font-mono uppercase tracking-wider transition-colors flex items-center justify-center gap-2 shadow-xs disabled:opacity-50"
-                >
-                  {isDeploying && selectedChainIndex === idx ? (
-                    <>
-                      <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                      Pricing Out Commodity Swaps...
-                    </>
-                  ) : (
-                    'Deploy Ripple Hypothesis'
-                  )}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Freeform Hypothesis Engine Input */}
-      <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-xs">
-        <h3 className="text-base font-bold text-slate-900 mb-2">
-          Custom Hypothesis & Ripple Generator
-        </h3>
-        <p className="text-xs text-slate-600 mb-4 font-normal">
-          Type any event (e.g. <em>"Elon is going to buy a car company"</em> or <em>"Pepsi launches massive canned beverage campaign"</em>). The quant agent will trace second-order commodities (aluminum, lithium, copper) and price out actionable call/put arbitrage tickets.
-        </p>
-
-        <form onSubmit={handleCustomSubmit} className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3">
+      {/* Search & Category Filter Bar */}
+      <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-3">
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+          <div className="relative flex-1 max-w-xl">
+            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="e.g. Elon is buying an automaker / Pepsi canned beverage initiative surge..."
-              value={customEventPrompt}
-              onChange={(e) => setCustomEventPrompt(e.target.value)}
-              className="flex-1 bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-900 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search live leads: PitchBook, Fed rates, Treasury bonds, real estate, cybersecurity, AI, NVDA…"
+              className="w-full rounded-lg border border-stone-200 bg-stone-50/70 pl-9 pr-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:bg-white focus:border-blue-600 focus:outline-none"
             />
-            <button
-              type="submit"
-              disabled={isDeploying || !customEventPrompt.trim()}
-              className="py-3 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs sm:text-sm font-semibold whitespace-nowrap shadow-xs transition-colors disabled:opacity-50"
-            >
-              {isDeploying ? 'Synthesizing...' : 'Trace Commodity Ripples'}
-            </button>
           </div>
+          {liveData?.fetchedAt && (
+            <div className="text-xs font-mono text-stone-500 shrink-0">
+              Updated {new Date(liveData.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          {CATEGORIES.map((cat) => {
+            const count =
+              cat === 'All'
+                ? liveData?.totalStories || 0
+                : liveData?.categoryCounts?.[cat] || 0;
+            const active = selectedCategory === cat;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                  active
+                    ? 'bg-stone-900 text-white border-stone-900'
+                    : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
+                }`}
+              >
+                {cat}
+                {liveData && (
+                  <span className={`ml-1.5 font-mono text-[10px] ${active ? 'text-stone-300' : 'text-stone-400'}`}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Expandable Top 100 Open-Source Financial Platforms Directory */}
+      {showAll100 && liveData?.catalog && (
+        <div className="bg-white border border-stone-200 rounded-xl p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-3">
+            <div>
+              <h2 className="text-base font-bold text-stone-900">
+                Top 100 Curated Financial Research Platforms &amp; Open APIs
+              </h2>
+              <p className="text-xs text-stone-500 mt-0.5">
+                Direct links to RSS wires, open government APIs, VC/PE deal trackers, real estate journals, cybersecurity advisories, and quantitative research feeds.
+              </p>
+            </div>
+            <select
+              value={catalogCategory}
+              onChange={(e) => setCatalogCategory(e.target.value)}
+              className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-800 bg-white"
+            >
+              {CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 max-h-[420px] overflow-y-auto pr-1">
+            {filteredCatalog.map((src) => (
+              <div
+                key={src.id}
+                className="p-3 rounded-lg border border-stone-200 bg-stone-50/50 hover:bg-white hover:border-stone-300 transition-colors flex flex-col justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="text-[10px] font-mono text-stone-400">#{src.rank}</span>
+                    <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-stone-200/70 text-stone-700">
+                      {src.protocol}
+                    </span>
+                  </div>
+                  <div className="text-xs font-semibold text-stone-900 truncate mt-1">{src.name}</div>
+                  <div className="text-[11px] text-stone-500 truncate">{src.category}</div>
+                </div>
+                <div className="flex items-center justify-between pt-1.5 border-t border-stone-200/60">
+                  <span className="text-[10px] font-mono text-stone-500 truncate">{src.domain}</span>
+                  <a
+                    href={src.websiteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 shrink-0"
+                  >
+                    Visit
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-800 flex items-center justify-between gap-4">
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => void loadFeeds(true)}
+            className="px-3 py-1.5 rounded-lg bg-white border border-red-200 text-xs font-semibold text-red-700 hover:bg-red-50"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Main Content: Live Stories (Left 8) + Live Market Sidebars (Right 4) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left: Real Live Stories & Leads */}
+        <div className="lg:col-span-8 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-stone-600 font-mono">
+              Live Stories &amp; Research Leads ({filteredStories.length})
+            </h2>
+            {selectedCategory !== 'All' && (
+              <button
+                type="button"
+                onClick={() => setSelectedCategory('All')}
+                className="text-xs font-medium text-blue-600 hover:text-blue-700"
+              >
+                Show all sectors
+              </button>
+            )}
+          </div>
+
+          {loading ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <div key={n} className="bg-white border border-stone-200 rounded-xl p-5 space-y-2.5">
+                  <div className="h-3 w-40 bg-stone-100 rounded" />
+                  <div className="h-5 w-4/5 bg-stone-200 rounded" />
+                  <div className="h-3.5 w-full bg-stone-100 rounded" />
+                </div>
+              ))}
+            </div>
+          ) : filteredStories.length === 0 ? (
+            <div className="bg-white border border-stone-200 rounded-xl p-8 text-center">
+              <p className="text-sm font-medium text-stone-700">
+                No live stories matched &ldquo;{searchQuery}&rdquo; in {selectedCategory}.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedCategory('All');
+                }}
+                className="mt-3 px-4 py-2 rounded-lg bg-stone-900 text-white text-xs font-semibold"
+              >
+                Reset filters
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredStories.slice(0, 40).map((story) => (
+                <article
+                  key={story.id}
+                  className="bg-white border border-stone-200 rounded-xl p-4 sm:p-5 hover:border-stone-300 transition-colors"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded">
+                        {story.category}
+                      </span>
+                      <span className="text-xs font-semibold text-stone-800">{story.source}</span>
+                      <span className="text-[11px] font-mono text-stone-400">{story.domain}</span>
+                    </div>
+                    <span className="text-[11px] font-mono text-stone-500">
+                      {formatStoryTime(story.publishedAt)}
+                    </span>
+                  </div>
+
+                  <a
+                    href={story.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-base font-bold text-stone-900 hover:text-blue-700 transition-colors leading-snug"
+                  >
+                    {story.title}
+                  </a>
+
+                  {story.summary && (
+                    <p className="text-xs sm:text-sm text-stone-600 mt-1.5 leading-relaxed line-clamp-2">
+                      {story.summary}
+                    </p>
+                  )}
+
+                  <div className="mt-3 pt-3 border-t border-stone-100 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {story.tickers?.slice(0, 4).map((tk) => (
+                        <span
+                          key={tk}
+                          className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-stone-100 text-stone-700"
+                        >
+                          ${tk}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={story.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-stone-600 hover:text-stone-900 px-2.5 py-1.5 rounded-lg border border-stone-200 hover:bg-stone-50 transition-colors"
+                      >
+                        Read source
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                      {onAsk && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onAsk(
+                              `Analyze this live headline from ${story.source}: "${story.title}". What stocks, bonds, sectors, or risks does it affect?`,
+                              focusForCategory(story.category)
+                            )
+                          }
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          <Sparkles className="w-3 h-3" />
+                          Ask Sentinel
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Right Sidebar: Live US Treasury Bonds, Live Polymarket Odds, Live SEC Filings */}
+        <div className="lg:col-span-4 space-y-5">
+          {/* Official US Treasury Rates */}
+          <div className="bg-white border border-stone-200 rounded-xl p-5 space-y-3">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <Landmark className="w-4 h-4 text-blue-600" />
+                <h3 className="text-sm font-bold text-stone-900">US Treasury Bond Rates</h3>
+              </div>
+              <span className="text-[10px] font-mono uppercase text-stone-500">Fiscal Data API</span>
+            </div>
+
+            {liveData?.treasuryRates?.length ? (
+              <div className="space-y-2">
+                {liveData.treasuryRates.slice(0, 6).map((rate) => (
+                  <div
+                    key={rate.securityDesc}
+                    className="flex items-center justify-between py-1.5 border-b border-stone-100 last:border-0 text-xs"
+                  >
+                    <span className="text-stone-700 font-medium truncate pr-2">
+                      {rate.securityDesc}
+                    </span>
+                    <span className="font-mono font-bold text-stone-900 tabular-nums shrink-0">
+                      {rate.avgInterestRateAmt.toFixed(2)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-stone-500">Loading official Treasury bond yields…</p>
+            )}
+
+            {onAsk && (
+              <button
+                type="button"
+                onClick={() =>
+                  onAsk(
+                    'How do current US Treasury bond yields and Federal Reserve rate expectations affect stocks, REITs, and bond ETFs like TLT and SHY?',
+                    'macro'
+                  )
+                }
+                className="w-full py-2 rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200 text-xs font-semibold text-stone-800 transition-colors"
+              >
+                Ask Sentinel about Treasury bonds &amp; Fed rates →
+              </button>
+            )}
+          </div>
+
+          {/* Live Polymarket Prediction Odds */}
+          <div className="bg-white border border-stone-200 rounded-xl p-5 space-y-3">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-emerald-600" />
+                <h3 className="text-sm font-bold text-stone-900">Live Prediction Markets</h3>
+              </div>
+              <span className="text-[10px] font-mono uppercase text-stone-500">Polymarket API</span>
+            </div>
+
+            {liveData?.polymarkets?.length ? (
+              <div className="space-y-3">
+                {liveData.polymarkets.slice(0, 5).map((pm) => {
+                  const pct = Math.round(pm.yesPrice * 100);
+                  return (
+                    <div
+                      key={pm.id}
+                      className="p-3 rounded-lg bg-stone-50 border border-stone-200/80 space-y-1.5"
+                    >
+                      <a
+                        href={pm.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-semibold text-stone-900 hover:text-blue-700 line-clamp-2 leading-snug block"
+                      >
+                        {pm.question}
+                      </a>
+                      <div className="flex items-center justify-between text-[11px] font-mono">
+                        <span className="font-bold text-emerald-700">YES {pct}%</span>
+                        <span className="text-stone-500">
+                          24h Vol: ${Math.round(pm.volume24hr).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-600 rounded-full"
+                          style={{ width: `${Math.max(4, Math.min(100, pct))}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-xs text-stone-500">Loading active Polymarket contracts…</p>
+            )}
+          </div>
+
+          {/* Live SEC EDGAR 8-K Filings */}
+          <div className="bg-white border border-stone-200 rounded-xl p-5 space-y-3">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-stone-700" />
+                <h3 className="text-sm font-bold text-stone-900">Latest SEC EDGAR 8-K Filings</h3>
+              </div>
+              <span className="text-[10px] font-mono uppercase text-stone-500">SEC.gov Live</span>
+            </div>
+
+            {liveData?.secFilings?.length ? (
+              <div className="space-y-2.5">
+                {liveData.secFilings.slice(0, 6).map((f) => (
+                  <a
+                    key={f.id}
+                    href={f.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block p-2.5 rounded-lg border border-stone-200/70 hover:bg-stone-50 transition-colors"
+                  >
+                    <div className="text-xs font-semibold text-stone-900 line-clamp-1">
+                      {f.title}
+                    </div>
+                    <div className="text-[11px] font-mono text-stone-500 mt-0.5 flex items-center justify-between">
+                      <span>Form 8-K · SEC EDGAR</span>
+                      <span>{formatStoryTime(f.publishedAt)}</span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-stone-500">Fetching recent SEC 8-K corporate filings…</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom: Turn Any Live Trend into a Custom Research Plan */}
+      <div className="bg-white border border-stone-200 rounded-xl p-5 sm:p-6 space-y-4">
+        <div>
+          <h2 className="text-base font-bold text-stone-900">
+            Turn a Live Headline into Your Research Plan
+          </h2>
+          <p className="text-xs sm:text-sm text-stone-600 mt-0.5">
+            Spot a trend in bonds, real estate, cybersecurity, AI, or commodities? Enter it below and Sentinel will refresh your Market Ideas and 11 research guides around it.
+          </p>
+        </div>
+
+        <form onSubmit={handleDeploySubmit} className="flex flex-col sm:flex-row gap-2.5">
+          <input
+            type="text"
+            value={customHypothesis}
+            onChange={(e) => setCustomHypothesis(e.target.value)}
+            placeholder="e.g., Rising data-center cybersecurity budgets -> CrowdStrike (CRWD), Palo Alto (PANW), CIBR ETF"
+            className="flex-1 rounded-lg border border-stone-300 px-3.5 py-2.5 text-sm text-stone-900 focus:border-blue-600 focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={isDeploying || !customHypothesis.trim()}
+            className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors disabled:opacity-50 shrink-0"
+          >
+            <Send className="w-3.5 h-3.5" />
+            {isDeploying ? 'Updating plan…' : 'Research this idea'}
+          </button>
         </form>
+
+        {chains.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
+            {chains.slice(0, 3).map((chain, idx) => (
+              <div
+                key={`${chain.impactedCommodity}-${idx}`}
+                className="p-3.5 rounded-lg border border-stone-200 bg-stone-50/70 flex flex-col justify-between gap-2.5"
+              >
+                <div>
+                  <div className="text-xs font-bold text-stone-900">{chain.primaryEvent}</div>
+                  <p className="text-xs text-stone-600 mt-1 line-clamp-2">{chain.derivedHypothesis}</p>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-stone-200/70">
+                  <span className="text-[11px] font-mono font-semibold text-emerald-700 truncate pr-2">
+                    {chain.recommendedContract}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={isDeploying}
+                    onClick={() => void onDeployHypothesis(`${chain.primaryEvent}: ${chain.derivedHypothesis}`)}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700 shrink-0"
+                  >
+                    Use idea
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

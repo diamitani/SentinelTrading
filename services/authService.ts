@@ -1,16 +1,17 @@
 // ============================================================================
-// Accounts: sign up, log in, log out.
+// Accounts: instant guest access + optional personal email sign up / log in.
 //
-// Two modes, picked automatically:
-//  • SUPABASE MODE (real accounts): used when the Supabase URL + public key
-//    are set. On Vercel the Supabase connection already sets
-//    NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY. Locally, put
-//    the same two lines in a .env file. Accounts live in your Supabase project.
-//  • PREVIEW MODE (no keys yet): accounts are saved in this browser only.
-//    Good for building and demos. NOT a real customer list.
+// Three modes, handled smoothly:
+//  • GUEST MODE: instant one-click access with no email required. Saved in
+//    this browser so everyday users can try paper trading immediately.
+//  • SUPABASE MODE (real accounts): used when Supabase URL + public key are
+//    configured. Upgrading from Guest to a personal email migrates their
+//    paper portfolio automatically.
+//  • PREVIEW MODE (no keys yet): personal email accounts saved in this browser.
 // ============================================================================
 import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
 import { PlanId, DEFAULT_PLAN, isPlanId } from '../config/plans';
+import { migratePaperPortfolio } from './paperPortfolioService';
 
 export interface UserProfile {
   id: string;
@@ -18,6 +19,8 @@ export interface UserProfile {
   fullName: string;
   plan: PlanId;
   createdAt: string;
+  isGuest?: boolean;
+  startingBudget?: number;
 }
 
 const env = (import.meta as any).env || {};
@@ -53,22 +56,30 @@ const friendlyError = (message: string): string => {
 const fromSupabaseUser = (u: User): UserProfile => {
   const meta = (u.user_metadata || {}) as Record<string, unknown>;
   const plan = String(meta.plan || '');
+  const budget = Number(meta.starting_budget);
   return {
     id: u.id,
     email: u.email || '',
     fullName: String(meta.full_name || u.email?.split('@')[0] || 'Trader'),
     plan: isPlanId(plan) ? plan : DEFAULT_PLAN,
     createdAt: u.created_at,
+    isGuest: false,
+    startingBudget: Number.isFinite(budget) && budget >= 25 ? budget : undefined,
   };
 };
 
-/* --------------------- Preview mode (browser storage) -------------------- */
+/* ---------------- Browser storage (Guest + Preview accounts) -------------- */
 
 const ACCOUNTS_KEY = 'sentinel_preview_accounts_v1';
 const SESSION_KEY = 'sentinel_preview_session_v1';
-const previewListeners = new Set<Listener>();
+const GUEST_KEY = 'sentinel_guest_session_v1';
+const listeners = new Set<Listener>();
 
 type StoredAccount = UserProfile & { passwordHash: string };
+
+const notify = (user: UserProfile | null) => {
+  listeners.forEach((fn) => fn(user));
+};
 
 const readAccounts = (): Record<string, StoredAccount> => {
   try {
@@ -82,6 +93,24 @@ const writeAccounts = (accounts: Record<string, StoredAccount>) => {
   localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
 };
 
+const readGuestSession = (): UserProfile | null => {
+  try {
+    const raw = localStorage.getItem(GUEST_KEY);
+    return raw ? (JSON.parse(raw) as UserProfile) : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeGuestSession = (guest: UserProfile | null) => {
+  try {
+    if (guest) localStorage.setItem(GUEST_KEY, JSON.stringify(guest));
+    else localStorage.removeItem(GUEST_KEY);
+  } catch {
+    // ignore storage errors
+  }
+};
+
 const hashPassword = async (password: string): Promise<string> => {
   const bytes = new TextEncoder().encode('sentinel:' + password);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
@@ -93,7 +122,7 @@ const hashPassword = async (password: string): Promise<string> => {
 const setPreviewSession = (user: UserProfile | null) => {
   if (user) localStorage.setItem(SESSION_KEY, JSON.stringify(user));
   else localStorage.removeItem(SESSION_KEY);
-  previewListeners.forEach((fn) => fn(user));
+  notify(user);
 };
 
 const strip = ({ passwordHash: _ignored, ...profile }: StoredAccount): UserProfile => profile;
@@ -103,26 +132,78 @@ const strip = ({ passwordHash: _ignored, ...profile }: StoredAccount): UserProfi
 export async function getCurrentUser(): Promise<UserProfile | null> {
   if (supabase) {
     const { data } = await supabase.auth.getSession();
-    return data.session?.user ? fromSupabaseUser(data.session.user) : null;
+    if (data.session?.user) {
+      return fromSupabaseUser(data.session.user);
+    }
+    return readGuestSession();
   }
   try {
     const raw = localStorage.getItem(SESSION_KEY);
-    return raw ? (JSON.parse(raw) as UserProfile) : null;
+    if (raw) return JSON.parse(raw) as UserProfile;
   } catch {
-    return null;
+    // ignore
   }
+  return readGuestSession();
 }
 
-/** Calls `fn` whenever someone logs in or out. Returns a function to stop listening. */
+/** Calls `fn` whenever someone enters guest mode, logs in, or logs out. */
 export function onAuthChange(fn: Listener): () => void {
+  listeners.add(fn);
   if (supabase) {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      fn(session?.user ? fromSupabaseUser(session.user) : null);
+      if (session?.user) {
+        fn(fromSupabaseUser(session.user));
+      } else {
+        fn(readGuestSession());
+      }
     });
-    return () => data.subscription.unsubscribe();
+    return () => {
+      listeners.delete(fn);
+      data.subscription.unsubscribe();
+    };
   }
-  previewListeners.add(fn);
-  return () => previewListeners.delete(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+/** Instant frictionless guest entry — no email or password needed. */
+export function enterGuestMode(startingBudget = 1000, plan: PlanId = DEFAULT_PLAN): UserProfile {
+  const existing = readGuestSession();
+  if (existing && existing.isGuest) {
+    const updated: UserProfile = {
+      ...existing,
+      plan: plan || existing.plan,
+      startingBudget: startingBudget || existing.startingBudget || 1000,
+    };
+    writeGuestSession(updated);
+    notify(updated);
+    return updated;
+  }
+
+  const guest: UserProfile = {
+    id: 'guest_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().slice(0, 10) : Math.random().toString(36).slice(2, 10)),
+    email: '',
+    fullName: 'Guest Trader',
+    plan,
+    createdAt: new Date().toISOString(),
+    isGuest: true,
+    startingBudget,
+  };
+  writeGuestSession(guest);
+  notify(guest);
+  return guest;
+}
+
+export function updateProfileBudget(user: UserProfile, startingBudget: number): UserProfile {
+  const updated: UserProfile = { ...user, startingBudget };
+  if (user.isGuest) {
+    writeGuestSession(updated);
+    notify(updated);
+  } else if (!supabase) {
+    setPreviewSession(updated);
+  }
+  return updated;
 }
 
 export interface SignUpInput {
@@ -130,6 +211,7 @@ export interface SignUpInput {
   password: string;
   fullName: string;
   plan: PlanId;
+  startingBudget?: number;
 }
 
 export interface SignUpResult {
@@ -143,22 +225,30 @@ export async function signUp(input: SignUpInput): Promise<SignUpResult> {
   const fullName = input.fullName.trim();
   if (input.password.length < 8) throw new Error('Your password needs at least 8 characters.');
 
+  const activeGuest = readGuestSession();
+  const budget = input.startingBudget || activeGuest?.startingBudget || 1000;
+
   if (supabase) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password: input.password,
       options: {
-        data: { full_name: fullName, plan: input.plan },
+        data: { full_name: fullName, plan: input.plan, starting_budget: budget },
         emailRedirectTo: `${window.location.origin}/app`,
       },
     });
     if (error) throw new Error(friendlyError(error.message));
-    // Supabase returns a user with no identities when the email is already taken.
     if (data.user && data.user.identities && data.user.identities.length === 0) {
       throw new Error(friendlyError('already registered'));
     }
+    if (data.user && activeGuest) {
+      migratePaperPortfolio(activeGuest.id, data.user.id);
+    }
     if (!data.session) return { user: null, needsEmailConfirmation: true };
-    return { user: fromSupabaseUser(data.session.user), needsEmailConfirmation: false };
+    writeGuestSession(null);
+    const created = fromSupabaseUser(data.session.user);
+    notify(created);
+    return { user: created, needsEmailConfirmation: false };
   }
 
   const accounts = readAccounts();
@@ -169,10 +259,16 @@ export async function signUp(input: SignUpInput): Promise<SignUpResult> {
     fullName: fullName || email.split('@')[0],
     plan: input.plan,
     createdAt: new Date().toISOString(),
+    isGuest: false,
+    startingBudget: budget,
     passwordHash: await hashPassword(input.password),
   };
   accounts[email] = account;
   writeAccounts(accounts);
+  if (activeGuest) {
+    migratePaperPortfolio(activeGuest.id, account.id);
+    writeGuestSession(null);
+  }
   const user = strip(account);
   setPreviewSession(user);
   return { user, needsEmailConfirmation: false };
@@ -180,14 +276,26 @@ export async function signUp(input: SignUpInput): Promise<SignUpResult> {
 
 export async function logIn(emailInput: string, password: string): Promise<UserProfile> {
   const email = emailInput.trim().toLowerCase();
+  const activeGuest = readGuestSession();
+
   if (supabase) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new Error(friendlyError(error.message));
-    return fromSupabaseUser(data.user);
+    if (activeGuest) {
+      migratePaperPortfolio(activeGuest.id, data.user.id);
+      writeGuestSession(null);
+    }
+    const loggedIn = fromSupabaseUser(data.user);
+    notify(loggedIn);
+    return loggedIn;
   }
   const account = readAccounts()[email];
   if (!account || account.passwordHash !== (await hashPassword(password))) {
     throw new Error(friendlyError('invalid login'));
+  }
+  if (activeGuest) {
+    migratePaperPortfolio(activeGuest.id, account.id);
+    writeGuestSession(null);
   }
   const user = strip(account);
   setPreviewSession(user);
@@ -195,9 +303,9 @@ export async function logIn(emailInput: string, password: string): Promise<UserP
 }
 
 export async function logOut(): Promise<void> {
+  writeGuestSession(null);
   if (supabase) {
     await supabase.auth.signOut();
-    return;
   }
   setPreviewSession(null);
 }

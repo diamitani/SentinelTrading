@@ -9,7 +9,7 @@ interface GrowthSimulatorViewProps {
 
 export const GrowthSimulatorView: React.FC<GrowthSimulatorViewProps> = ({ onDeployToArbitrage }) => {
   const [initialCapital, setInitialCapital] = useState<number>(100);
-  const [monthlyContribution, setMonthlyContribution] = useState<number>(25);
+  const [monthlyContribution, setMonthlyContribution] = useState<number>(50);
   const [simulationData, setSimulationData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -26,16 +26,16 @@ export const GrowthSimulatorView: React.FC<GrowthSimulatorViewProps> = ({ onDepl
   };
 
   useEffect(() => {
-    runSim(initialCapital, monthlyContribution);
+    void runSim(initialCapital, monthlyContribution);
   }, []);
 
   const handleRecalculate = (e: React.FormEvent) => {
     e.preventDefault();
-    runSim(initialCapital, monthlyContribution);
+    void runSim(initialCapital, monthlyContribution);
   };
 
   const milestones: CompoundMilestone[] = simulationData?.milestones || [];
-  const finalValue = simulationData?.config?.finalPortfolioValue || 1084.50;
+  const finalValue = simulationData?.config?.finalPortfolioValue || 1084.5;
   const multiplier = simulationData?.config?.achievedMultiplier || '10.8x';
 
   const chartData = milestones.map((m) => ({
@@ -45,118 +45,122 @@ export const GrowthSimulatorView: React.FC<GrowthSimulatorViewProps> = ({ onDepl
   }));
 
   return (
-    <div className="space-y-8 animate-fade-in pb-12">
+    <div className="space-y-6 pb-12">
       {/* Top Banner */}
-      <div className="bg-slate-50 border border-slate-200 p-4 sm:p-6 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-xs">
+      <div className="bg-white border border-stone-200 p-5 sm:p-6 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">
-              Everyday Investor 10x Growth Engine ($100 to Enterprise)
-            </h2>
-            <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-              1,000,000 COMMUNITY INITIATIVE
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <span className="text-[11px] font-mono uppercase tracking-wider font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+              Hypothetical Compounding Tool
+            </span>
+            <span className="text-[11px] font-mono text-stone-500">
+              Built for $100 to $50,000+ budgets
             </span>
           </div>
-          <p className="text-xs text-slate-600 mt-1 max-w-3xl font-normal">
-            Designed to democratize quantitative institutional trading. Start with <span className="font-semibold text-slate-900">$100 or less</span>. Leverages low-risk statistical arbitrage, options conversions, and disciplined automated stops (0.65% max single-trade risk) to compound into an enterprise portfolio.
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-stone-900">
+            Personal Savings &amp; Compounding Simulator
+          </h1>
+          <p className="text-sm text-stone-600 mt-1 max-w-3xl">
+            See how starting with <span className="font-semibold text-stone-900">$100 or any budget</span> and adding steady monthly deposits can compound over 12 months when paired with disciplined risk limits.
           </p>
         </div>
 
         <button
+          type="button"
           onClick={onDeployToArbitrage}
-          className="px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-colors shadow-xs w-full md:w-auto whitespace-nowrap shrink-0"
+          className="px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-colors w-full md:w-auto whitespace-nowrap shrink-0"
         >
-          Deploy $100 into Daily Arbitrage &rarr;
+          Browse Researched Market Ideas &rarr;
         </button>
       </div>
 
       {/* 4 Outcome Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200 p-5 rounded-xl shadow-xs">
-          <div className="text-[11px] text-slate-400 font-mono uppercase font-semibold">Initial Starting Seed</div>
-          <div className="text-2xl font-mono font-bold text-slate-900 tracking-tight mt-1">
-            ${initialCapital.toFixed(2)}
+        <div className="bg-white border border-stone-200 p-5 rounded-xl">
+          <div className="text-[11px] text-stone-500 font-mono uppercase font-semibold">Starting Budget</div>
+          <div className="text-2xl font-mono font-bold text-stone-900 tracking-tight mt-1 tabular-nums">
+            ${initialCapital.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
-          <div className="text-xs text-slate-500 mt-1">Accessible to anyone worldwide</div>
+          <div className="text-xs text-stone-500 mt-1">Start small or scale up anytime</div>
         </div>
 
-        <div className="bg-white border border-slate-200 p-5 rounded-xl shadow-xs">
-          <div className="text-[11px] text-emerald-700 font-mono uppercase font-semibold">1-Year Target Multiple</div>
-          <div className="text-2xl font-mono font-bold text-emerald-600 tracking-tight mt-1">
+        <div className="bg-white border border-stone-200 p-5 rounded-xl">
+          <div className="text-[11px] text-emerald-700 font-mono uppercase font-semibold">Illustrative Multiple</div>
+          <div className="text-2xl font-mono font-bold text-emerald-600 tracking-tight mt-1 tabular-nums">
             {multiplier}
           </div>
-          <div className="text-xs text-emerald-700 mt-1">Systematic compound rate</div>
+          <div className="text-xs text-stone-500 mt-1">Hypothetical model only</div>
         </div>
 
-        <div className="bg-white border border-slate-200 p-5 rounded-xl shadow-xs">
-          <div className="text-[11px] text-blue-600 font-mono uppercase font-semibold">Projected 12-Mo Portfolio</div>
-          <div className="text-2xl font-mono font-bold text-blue-600 tracking-tight mt-1">
+        <div className="bg-white border border-stone-200 p-5 rounded-xl">
+          <div className="text-[11px] text-blue-600 font-mono uppercase font-semibold">12-Month Projection</div>
+          <div className="text-2xl font-mono font-bold text-blue-600 tracking-tight mt-1 tabular-nums">
             ${finalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
-          <div className="text-xs text-slate-500 mt-1">From small consistent increments</div>
+          <div className="text-xs text-stone-500 mt-1">Including monthly deposits</div>
         </div>
 
-        <div className="bg-white border border-slate-200 p-5 rounded-xl shadow-xs">
-          <div className="text-[11px] text-slate-400 font-mono uppercase font-semibold">Max Drawdown Guardrail</div>
-          <div className="text-2xl font-mono font-bold text-slate-800 tracking-tight mt-1">
+        <div className="bg-white border border-stone-200 p-5 rounded-xl">
+          <div className="text-[11px] text-stone-500 font-mono uppercase font-semibold">Planned Risk Cap</div>
+          <div className="text-2xl font-mono font-bold text-stone-800 tracking-tight mt-1 tabular-nums">
             0.65%
           </div>
-          <div className="text-xs text-slate-500 mt-1">Capital preservation lock</div>
+          <div className="text-xs text-stone-500 mt-1">Max risk per single position</div>
         </div>
       </div>
 
-      {/* Main Interactive Compound Calculator & Chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
-        {/* Left Form (4 cols) */}
-        <div className="lg:col-span-4 min-w-0 space-y-6">
-          <div className="bg-white border border-slate-200 p-5 sm:p-6 rounded-xl shadow-xs">
-            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">
-              Compound Parameters
+      {/* Interactive Calculator & Chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-4 min-w-0">
+          <div className="bg-white border border-stone-200 p-5 rounded-xl">
+            <h3 className="text-sm font-bold text-stone-900 uppercase tracking-wider mb-4">
+              Your Numbers
             </h3>
 
             <form onSubmit={handleRecalculate} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Initial Capital ($)
+                <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                  Starting Amount ($)
                 </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[25, 50, 100, 250].map((val) => (
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[100, 500, 1000, 5000].map((val) => (
                     <button
                       type="button"
                       key={val}
                       onClick={() => setInitialCapital(val)}
                       className={`py-1.5 rounded-lg text-xs font-mono font-semibold border ${
                         initialCapital === val
-                          ? 'bg-slate-900 text-white border-slate-900'
-                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                          ? 'bg-stone-900 text-white border-stone-900'
+                          : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
                       }`}
                     >
-                      ${val}
+                      ${val >= 1000 ? `${val / 1000}k` : val}
                     </button>
                   ))}
                 </div>
                 <input
                   type="number"
+                  min={10}
                   value={initialCapital}
                   onChange={(e) => setInitialCapital(Number(e.target.value))}
-                  className="w-full bg-white border border-slate-200 text-xs font-mono text-slate-900 rounded-lg p-2.5 mt-2 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full bg-white border border-stone-200 text-xs font-mono text-stone-900 rounded-lg p-2.5 mt-2 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Monthly Addition ($)
+                <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                  Monthly Deposit ($)
                 </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[0, 25, 50, 100].map((val) => (
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[0, 25, 100, 250].map((val) => (
                     <button
                       type="button"
                       key={val}
                       onClick={() => setMonthlyContribution(val)}
                       className={`py-1.5 rounded-lg text-xs font-mono font-semibold border ${
                         monthlyContribution === val
-                          ? 'bg-slate-900 text-white border-slate-900'
-                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                          ? 'bg-stone-900 text-white border-stone-900'
+                          : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
                       }`}
                     >
                       ${val}
@@ -165,42 +169,44 @@ export const GrowthSimulatorView: React.FC<GrowthSimulatorViewProps> = ({ onDepl
                 </div>
                 <input
                   type="number"
+                  min={0}
                   value={monthlyContribution}
                   onChange={(e) => setMonthlyContribution(Number(e.target.value))}
-                  className="w-full bg-white border border-slate-200 text-xs font-mono text-slate-900 rounded-lg p-2.5 mt-2 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full bg-white border border-stone-200 text-xs font-mono text-stone-900 rounded-lg p-2.5 mt-2 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
 
-              <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs text-slate-600 space-y-1">
-                <div className="font-semibold text-slate-900">Quant Strategy Rules:</div>
-                <div>• Cross-exchange arbitrage (zero directional market exposure)</div>
-                <div>• Automatic scale triggers when spread &gt; 2.2%</div>
-                <div>• Profits automatically sweep into cash basis</div>
+              <div className="p-3 bg-stone-50 rounded-lg border border-stone-200 text-xs text-stone-600 space-y-1">
+                <div className="font-semibold text-stone-900">Important note:</div>
+                <p>
+                  This calculator illustrates hypothetical compounding math. Real markets fluctuate and can lose money; returns are never guaranteed.
+                </p>
               </div>
 
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-colors shadow-xs disabled:opacity-50"
+                className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-colors disabled:opacity-50"
               >
-                {isLoading ? 'Simulating...' : 'Recalculate Growth Trajectory'}
+                {isLoading ? 'Calculating…' : 'Update Projection'}
               </button>
             </form>
           </div>
         </div>
 
-        {/* Right Chart (8 cols) */}
-        <div className="lg:col-span-8 min-w-0 space-y-6">
-          <div className="bg-white border border-slate-200 p-4 sm:p-6 rounded-xl shadow-xs">
+        <div className="lg:col-span-8 min-w-0">
+          <div className="bg-white border border-stone-200 p-5 rounded-xl h-full">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
               <div>
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest font-mono">
-                  12-Month Compounding Trajectory
+                <h3 className="text-sm font-bold text-stone-900">
+                  12-Month Illustrative Growth Curve
                 </h3>
-                <span className="text-xs text-slate-500">Targeting 10x net capital appreciation with institutional arbitrage</span>
+                <span className="text-xs text-stone-500">
+                  Shows combined effect of starting budget, monthly deposits, and disciplined sizing
+                </span>
               </div>
-              <span className="text-xs font-mono font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 self-start sm:self-auto shrink-0">
-                10x GROWTH CURVE
+              <span className="text-xs font-mono font-semibold text-stone-600 bg-stone-100 px-2.5 py-1 rounded border border-stone-200 self-start sm:self-auto shrink-0">
+                Hypothetical Illustration
               </span>
             </div>
 
@@ -213,13 +219,25 @@ export const GrowthSimulatorView: React.FC<GrowthSimulatorViewProps> = ({ onDepl
                       <stop offset="95%" stopColor="#2563eb" stopOpacity={0.0} />
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="name" stroke="#94a3b8" tick={{ fill: '#64748b', fontSize: 11 }} />
-                  <YAxis stroke="#94a3b8" tick={{ fill: '#64748b', fontSize: 11 }} />
+                  <XAxis dataKey="name" stroke="#a8a29e" tick={{ fill: '#78716c', fontSize: 11 }} />
+                  <YAxis stroke="#a8a29e" tick={{ fill: '#78716c', fontSize: 11 }} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '8px', fontSize: '12px' }}
-                    formatter={(val: any) => [`$${Number(val).toLocaleString()}`, 'Portfolio Value']}
+                    contentStyle={{
+                      backgroundColor: '#ffffff',
+                      borderColor: '#e7e5e4',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                    }}
+                    formatter={(val: any) => [`$${Number(val).toLocaleString()}`, 'Projected Balance']}
                   />
-                  <Area type="monotone" dataKey="capital" stroke="#2563eb" strokeWidth={2.5} fillOpacity={1} fill="url(#growthGradient)" />
+                  <Area
+                    type="monotone"
+                    dataKey="capital"
+                    stroke="#2563eb"
+                    strokeWidth={2.5}
+                    fillOpacity={1}
+                    fill="url(#growthGradient)"
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -227,40 +245,42 @@ export const GrowthSimulatorView: React.FC<GrowthSimulatorViewProps> = ({ onDepl
         </div>
       </div>
 
-      {/* 12-Month Detailed Milestone Schedule Table */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-        <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-          <h3 className="text-xs font-bold text-slate-900 uppercase tracking-widest font-mono">
-            Month-By-Month Compounding Ledger
+      {/* Month-by-Month Schedule */}
+      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+        <div className="p-4 bg-stone-50 border-b border-stone-200 flex justify-between items-center">
+          <h3 className="text-xs font-bold text-stone-900 uppercase tracking-wider font-mono">
+            Month-by-Month Schedule
           </h3>
-          <span className="text-xs text-slate-500 font-mono">100% TRANSPARENT MODEL</span>
+          <span className="text-xs text-stone-500 font-mono">Illustrative Model</span>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs font-mono">
-            <thead className="bg-slate-50 text-slate-500 text-[10px] border-b border-slate-200">
+            <thead className="bg-stone-50 text-stone-500 text-[10px] border-b border-stone-200">
               <tr>
                 <th className="p-3">MONTH</th>
                 <th className="p-3 text-right">STARTING ($)</th>
-                <th className="p-3 text-right">ARBITRAGE GAIN</th>
-                <th className="p-3 text-right">ADDITION ($)</th>
-                <th className="p-3 text-right">ENDING CAPITAL ($)</th>
-                <th className="p-3 text-right">TRADES</th>
-                <th className="p-3 text-right">WIN RATE</th>
-                <th className="p-3">GUARDRAILS</th>
+                <th className="p-3 text-right">EST. GAIN</th>
+                <th className="p-3 text-right">DEPOSIT ($)</th>
+                <th className="p-3 text-right">ENDING BALANCE ($)</th>
+                <th className="p-3">RISK GUARDRAIL</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-stone-100">
               {milestones.map((m) => (
-                <tr key={m.month} className="hover:bg-slate-50/70 transition-colors">
-                  <td className="p-3 font-bold text-slate-900">Month {m.month}</td>
-                  <td className="p-3 text-right text-slate-600">${m.startingCapital.toFixed(2)}</td>
-                  <td className="p-3 text-right text-emerald-600 font-semibold">+{m.monthlyArbitrageGainPct}%</td>
-                  <td className="p-3 text-right text-slate-500">+${m.monthlyAddition.toFixed(2)}</td>
-                  <td className="p-3 text-right font-bold text-blue-600">${m.endingCapital.toFixed(2)}</td>
-                  <td className="p-3 text-right text-slate-700">{m.tradesExecuted}</td>
-                  <td className="p-3 text-right text-slate-800">{m.winRatePct}%</td>
-                  <td className="p-3 text-slate-500 text-[11px] truncate max-w-[200px]">{m.riskGuardrailsActive}</td>
+                <tr key={m.month} className="hover:bg-stone-50/70 transition-colors">
+                  <td className="p-3 font-bold text-stone-900">Month {m.month}</td>
+                  <td className="p-3 text-right text-stone-600 tabular-nums">${m.startingCapital.toFixed(2)}</td>
+                  <td className="p-3 text-right text-emerald-600 font-semibold tabular-nums">
+                    +{m.monthlyArbitrageGainPct}%
+                  </td>
+                  <td className="p-3 text-right text-stone-500 tabular-nums">+${m.monthlyAddition.toFixed(2)}</td>
+                  <td className="p-3 text-right font-bold text-blue-600 tabular-nums">
+                    ${m.endingCapital.toFixed(2)}
+                  </td>
+                  <td className="p-3 text-stone-500 text-[11px] truncate max-w-[220px]">
+                    {m.riskGuardrailsActive}
+                  </td>
                 </tr>
               ))}
             </tbody>

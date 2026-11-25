@@ -12,11 +12,9 @@ import {
   ArrowRight,
   ArrowLeft,
   ShieldCheck,
-  Zap,
   Target,
   Clock,
   Layers,
-  TrendingUp,
   Cpu,
 } from 'lucide-react';
 
@@ -38,48 +36,48 @@ const PRESET_SCENARIOS: Array<{
   assets: MarketCategoryType[];
 }> = [
   {
-    title: 'Pepsi Beverage Can Rollout → CME Aluminum Spike',
-    tag: 'Second-Order Commodity',
+    title: 'Fed Rate Path & US Treasury Bonds',
+    tag: 'Macro & Gov Bonds',
     prompt:
-      'High Pepsi canned beverage sales initiative creates supply strain in packaging sheet coil -> Buy CME Aluminum Dec $2,650 Calls (ALI=F), Alcoa (AA) Calls, and Ball Corp (BALL) before upstream spot reprices.',
-    philosophy: 'Second-Order Commodity Ripples',
-    horizon: '3-Day Profit',
+      'Monitor Federal Reserve policy signals and official US Treasury yields to compare long-duration bond ETFs (TLT), short-term Treasury bills (SHY), and rate-sensitive REITs (VNQ, O).',
+    philosophy: 'Long-Term Enterprise Compound',
+    horizon: 'Quarterly',
     goalTarget: '+10% Target',
-    targetReturnPct: 10.8,
-    assets: ['Commodities', 'Options', 'Equities', 'Prediction Markets'],
+    targetReturnPct: 10.0,
+    assets: ['Equities', 'Prediction Markets'],
   },
   {
-    title: 'Polymarket vs. Kalshi FOMC & Commodity Odds Spread',
-    tag: 'Prediction Markets Arb',
+    title: 'AI Infrastructure & Cybersecurity Spending',
+    tag: 'AI & Cyber Security',
     prompt:
-      'Retail flow on Polymarket lags institutional CFTC orderbook repricing on Kalshi and CME -> Lock delta-neutral +7.0% to +9.0% spreads on FOMC Rate Cut (64¢ vs 71¢) and Aluminum >$2,700/t Event Contracts.',
-    philosophy: 'Prediction & Betting Markets',
-    horizon: '3-Day Profit',
-    goalTarget: '+10% Target',
-    targetReturnPct: 10.2,
-    assets: ['Prediction Markets', 'Commodities', 'Options'],
-  },
-  {
-    title: 'AI Chips CoWoS Bottleneck → TSMC & NVDA Basis',
-    tag: 'Semiconductor Arbitrage',
-    prompt:
-      'Chips going up on hyperscaler AI capex and CoWoS wafer packaging tightness -> Arbitrage TSMC (TSM) NYSE ADR vs Taipei spot basis (+3.9%) and scale NVIDIA (NVDA) & Broadcom (AVGO) call conversions.',
+      'Enterprise AI rollouts are increasing cloud security budgets and chip capacity demand -> Track NVIDIA (NVDA), TSMC (TSM), CrowdStrike (CRWD), Palo Alto Networks (PANW), and CIBR ETF.',
     philosophy: 'Statistical Arbitrage',
-    horizon: 'Weekly',
-    goalTarget: '+10% Target',
-    targetReturnPct: 12.4,
+    horizon: 'Monthly',
+    goalTarget: '+25% Swing',
+    targetReturnPct: 18.0,
     assets: ['Equities', 'Options', 'Prediction Markets'],
   },
   {
-    title: 'Elon Automotive M&A Speculation → EV Call Skew',
-    tag: 'Asymmetric Event Skew',
+    title: 'Real Estate & REIT Income Recovery',
+    tag: 'Real Estate & REITs',
     prompt:
-      'Elon Musk strategic automotive M&A and EV platform consolidation rumors surging +620% on X and Google Trends -> Buy Rivian (RIVN) Oct $12.50 Calls, Lucid (LCID) Call Skew, and POLY-EV-MA prediction contract.',
-    philosophy: 'Asymmetric Options Skew',
-    horizon: 'Monthly',
-    goalTarget: '+25% Swing',
-    targetReturnPct: 24.5,
-    assets: ['Options', 'Equities', 'Prediction Markets'],
+      'Stabilizing mortgage rates and commercial real estate refinancing cycles -> Compare Vanguard Real Estate ETF (VNQ), Realty Income (O), and HousingWire / Commercial Observer live deal flow.',
+    philosophy: 'Long-Term Enterprise Compound',
+    horizon: 'Hold 1 Year',
+    goalTarget: '+10% Target',
+    targetReturnPct: 12.0,
+    assets: ['Equities', 'Prediction Markets'],
+  },
+  {
+    title: 'Supply-Chain & Commodity Ripples',
+    tag: 'Second-Order Supply',
+    prompt:
+      'Major consumer packaging and energy demand shifts ripple into upstream metals -> Watch Aluminum futures (ALI=F), Alcoa (AA), Ball Corp (BALL), and Gold (GLD) alongside live Polymarket odds.',
+    philosophy: 'Second-Order Commodity Ripples',
+    horizon: '3-Day Profit',
+    goalTarget: '+10% Target',
+    targetReturnPct: 10.4,
+    assets: ['Commodities', 'Equities', 'Prediction Markets'],
   },
 ];
 
@@ -89,29 +87,29 @@ const PHILOSOPHIES: Array<{
   desc: string;
 }> = [
   {
+    id: 'Long-Term Enterprise Compound',
+    title: 'Steady Personal Compounding ($100 to $50,000+)',
+    desc: 'Build wealth steadily with ETFs, quality stocks, US Treasury bonds, REITs, and disciplined position sizing.',
+  },
+  {
     id: 'Second-Order Commodity Ripples',
-    title: 'Second-Order Commodity Ripples',
-    desc: 'Trace corporate/consumer initiatives (Pepsi cans, AI datacenters) to upstream futures (CME Aluminum, Copper, Uranium) & smelters.',
+    title: 'Supply-Chain & Commodity Ripples',
+    desc: 'Spot how real-world consumer or AI demand affects upstream metals, energy, and suppliers before the crowd notices.',
   },
   {
     id: 'Prediction & Betting Markets',
-    title: 'Prediction & Betting Markets',
-    desc: 'Arbitrage probability dislocations across Polymarket CLOB, Kalshi CFTC Event Contracts, and CME Event Futures.',
+    title: 'Prediction & Macro Event Markets',
+    desc: 'Compare live Polymarket crowd odds against Federal Reserve, inflation, and economic data releases.',
   },
   {
     id: 'Statistical Arbitrage',
-    title: 'Cross-Venue Statistical Arbitrage',
-    desc: 'Capture dual-listed ADR basis (NYSE vs LSE/Taipei), cash vs futures carry, and dark pool depth divergences.',
+    title: 'Sector Rotation & Relative Value',
+    desc: 'Compare leading stocks and ETFs against peers across technology, cybersecurity, healthcare, and financials.',
   },
   {
     id: 'Asymmetric Options Skew',
-    title: 'Asymmetric Options Skew & Box Spreads',
-    desc: 'Exploit underpriced implied volatility and CBOE conversion boxes around M&A and earnings catalysts.',
-  },
-  {
-    id: 'Long-Term Enterprise Compound',
-    title: 'Long-Term Enterprise Compound ($100 → 10x)',
-    desc: 'Systematic low-drawdown (0.65% max stop) compounding from $100 entry capital up to institutional Plaid DMA scale.',
+    title: 'Defined-Risk Catalyst Trades',
+    desc: 'Study earnings, M&A, and macro catalysts with strict stop-loss rules and capped downside exposure.',
   },
 ];
 
@@ -121,11 +119,11 @@ const HORIZONS: Array<{
   sub: string;
   defaultPct: number;
 }> = [
-  { id: '3-Day Profit', label: '3-Day Profit', sub: 'Fast catalyst & event spread', defaultPct: 10.4 },
-  { id: 'Weekly', label: 'Weekly Cycle', sub: '5-7 day basis convergence', defaultPct: 12.5 },
-  { id: 'Monthly', label: 'Monthly Swing', sub: '30-day commodity & options cycle', defaultPct: 22.0 },
-  { id: 'Quarterly', label: 'Quarterly Macro', sub: '90-day earnings & supply ripple', defaultPct: 45.0 },
-  { id: 'Hold 1 Year', label: 'Hold 1 Year', sub: '12-month 10x enterprise compound', defaultPct: 120.0 },
+  { id: '3-Day Profit', label: 'Short-Term (3 Days)', sub: 'Fast news & catalyst focus', defaultPct: 8.0 },
+  { id: 'Weekly', label: 'Weekly', sub: '5–7 day swing ideas', defaultPct: 10.0 },
+  { id: 'Monthly', label: 'Monthly', sub: '30-day sector trends', defaultPct: 15.0 },
+  { id: 'Quarterly', label: 'Quarterly', sub: '90-day earnings & Fed cycle', defaultPct: 22.0 },
+  { id: 'Hold 1 Year', label: '1-Year+', sub: 'Long-term wealth building', defaultPct: 30.0 },
 ];
 
 const GOAL_TARGETS: Array<{
@@ -133,19 +131,21 @@ const GOAL_TARGETS: Array<{
   label: string;
   pct: number;
 }> = [
-  { id: '+10% Target', label: '+10% High-Probability Target', pct: 10.4 },
-  { id: '+25% Swing', label: '+25% Catalyst Swing', pct: 25.0 },
-  { id: '2x-5x Macro', label: '2x–5x Asymmetric Macro', pct: 150.0 },
-  { id: '10x Annual Compound', label: '10x Annual Compound ($100 → $1,000+)', pct: 900.0 },
+  { id: '+10% Target', label: 'Steady Growth (+10% goal)', pct: 10.0 },
+  { id: '+25% Swing', label: 'Active Growth (+25% goal)', pct: 25.0 },
+  { id: '2x-5x Macro', label: 'High-Conviction Macro', pct: 50.0 },
+  { id: '10x Annual Compound', label: 'Long-Term Builder ($100+ start)', pct: 100.0 },
 ];
 
 const ALL_ASSET_CLASSES: MarketCategoryType[] = [
+  'Equities',
   'Commodities',
   'Prediction Markets',
-  'Equities',
   'Options',
   'Crypto Basis',
 ];
+
+const EVERYDAY_BUDGETS = [100, 500, 1000, 5000, 10000, 25000, 50000];
 
 export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
   isOpen,
@@ -159,14 +159,14 @@ export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
   const [config, setConfig] = useState<HypothesisWizardConfig>(
     initialConfig || {
       hypothesisPrompt:
-        'High Pepsi canned beverage sales rollout creating packaging sheet coil shortage -> CME Aluminum (ALI=F) & Alcoa (AA) calls + Polymarket/Kalshi inflation event spread; AI chip CoWoS capacity surge -> NVDA/TSM dual-listing arbitrage.',
-      philosophy: 'Second-Order Commodity Ripples',
+        'Monitor Federal Reserve policy, US Treasury bond rates (TLT, SHY), AI & cybersecurity leaders (NVDA, CRWD, PANW), and real estate REITs (VNQ) using live financial news feeds.',
+      philosophy: 'Long-Term Enterprise Compound',
       goalTarget: '+10% Target',
-      targetReturnPct: 10.4,
-      holdingHorizon: '3-Day Profit',
-      assetClasses: ['Commodities', 'Prediction Markets', 'Equities', 'Options', 'Crypto Basis'],
-      capitalAllocated: 10000,
-      maxDrawdownPct: 0.65,
+      targetReturnPct: 10.0,
+      holdingHorizon: 'Monthly',
+      assetClasses: ['Equities', 'Commodities', 'Prediction Markets'],
+      capitalAllocated: 1000,
+      maxDrawdownPct: 2.0,
       autoOptimizeWholeness: true,
     }
   );
@@ -209,31 +209,27 @@ export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden my-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 backdrop-blur-sm p-3 sm:p-6 overflow-y-auto">
+      <div className="bg-white border border-stone-200 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden my-auto">
         {/* Top Header */}
-        <div className="bg-slate-900 text-white px-5 py-4 flex items-center justify-between">
+        <div className="bg-stone-900 text-white px-5 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="p-2 rounded-lg bg-blue-600/20 border border-blue-400/30">
               <Sparkles className="w-5 h-5 text-blue-400" />
             </div>
             <div>
-              <div className="flex items-center space-x-2">
-                <h2 className="text-base sm:text-lg font-bold tracking-tight">
-                  ROSTR Hypothesis, Trading Philosophy &amp; Goals Wizard
-                </h2>
-                <span className="hidden sm:inline-block text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  One Must Act W = 1.00 Guide
-                </span>
-              </div>
-              <p className="text-xs text-slate-300">
-                Tell the ROSTR Agent OS your hypothesis, philosophy, and horizon (3-Day +10%, Weekly, 1-Year, Prediction Markets) to compile your research &amp; 11 POP artifacts.
+              <h2 className="text-base sm:text-lg font-bold tracking-tight">
+                Personal Strategy &amp; Research Wizard
+              </h2>
+              <p className="text-xs text-stone-300">
+                Tell Sentinel your market idea, budget ($100 to $50,000+), and timeframe to build a plain-English research plan.
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-stone-400 hover:text-white hover:bg-stone-800 transition-colors"
             aria-label="Close Wizard"
           >
             <X className="w-5 h-5" />
@@ -241,23 +237,23 @@ export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
         </div>
 
         {/* 4-Step Progress Bar */}
-        <div className="bg-slate-50 border-b border-slate-200 px-5 py-3 grid grid-cols-4 gap-2">
+        <div className="bg-stone-50 border-b border-stone-200 px-5 py-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
           {[
-            { num: 1, label: '1. Hypothesis & Catalyst' },
-            { num: 2, label: '2. Trading Philosophy' },
-            { num: 3, label: '3. Horizon & +10% Goals' },
-            { num: 4, label: '4. Wholeness (W=1.00)' },
+            { num: 1, label: '1. Market Idea' },
+            { num: 2, label: '2. Strategy Style' },
+            { num: 3, label: '3. Budget & Horizon' },
+            { num: 4, label: '4. Ready Check' },
           ].map((s) => (
             <button
               key={s.num}
               type="button"
               onClick={() => setStep(s.num as any)}
-              className={`text-left px-3 py-2 rounded-lg border text-xs font-bold transition-all ${
+              className={`text-left px-3 py-2 rounded-lg border text-xs font-semibold transition-all ${
                 step === s.num
-                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                  ? 'bg-blue-600 text-white border-blue-600'
                   : step > s.num
                   ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                  : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-100'
               }`}
             >
               <span className="truncate block">{s.label}</span>
@@ -270,21 +266,21 @@ export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
           {step === 1 && (
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                  What is your market hypothesis or catalyst? (Creative Warmth + Operational Truth Enabled)
+                <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1.5">
+                  What market idea, sector, or news trend do you want to research?
                 </label>
                 <textarea
                   rows={3}
                   value={config.hypothesisPrompt}
                   onChange={(e) => setConfig({ ...config, hypothesisPrompt: e.target.value })}
-                  placeholder="e.g., High Pepsi rollout meaning aluminum commodities (CME ALI=F, Alcoa AA, Ball Corp) might spike +10% in 3 days; or AI chips CoWoS bottleneck..."
-                  className="w-full rounded-xl border border-slate-300 bg-slate-50/50 p-3.5 text-sm text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
+                  placeholder="e.g., How will Federal Reserve rate decisions affect US Treasury bonds (TLT), REITs (VNQ), and cybersecurity stocks (CRWD)?"
+                  className="w-full rounded-xl border border-stone-300 bg-stone-50/50 p-3.5 text-sm text-stone-900 focus:bg-white focus:border-blue-600 focus:outline-none"
                 />
               </div>
 
               <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                  Or click a pre-calibrated institutional hypothesis scenario:
+                <div className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-2">
+                  Or start with a ready-made research theme:
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {PRESET_SCENARIOS.map((preset, idx) => (
@@ -292,17 +288,17 @@ export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
                       key={idx}
                       type="button"
                       onClick={() => applyPreset(preset)}
-                      className="text-left p-3.5 rounded-xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50/40 transition-all group"
+                      className="text-left p-3.5 rounded-xl border border-stone-200 hover:border-blue-500 hover:bg-blue-50/40 transition-all group"
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold text-slate-900 group-hover:text-blue-700">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-xs font-bold text-stone-900 group-hover:text-blue-700">
                           {preset.title}
                         </span>
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-semibold">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100 font-semibold shrink-0">
                           {preset.tag}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-600 line-clamp-2">{preset.prompt}</p>
+                      <p className="text-xs text-stone-600 line-clamp-2">{preset.prompt}</p>
                     </button>
                   ))}
                 </div>
@@ -311,7 +307,7 @@ export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
               <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-start space-x-3">
                 <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                 <div className="text-xs text-emerald-950">
-                  <span className="font-bold">Calibrated Truth Protocol Active:</span> Creative macro ideation flows with zero friction while operational tickers (<code className="font-mono">ALI=F, AA, BALL, POLY-ALU, KALSHI-FED, NVDA</code>), exchange venues, and expiry dates are regex-verified against canonical registries.
+                  <span className="font-bold">Live Source Verification:</span> Every research plan cross-checks tickers, bond yields, and headlines against live public APIs (Yahoo Finance, US Treasury Fiscal Data, Polymarket, and SEC EDGAR).
                 </div>
               </div>
             </div>
@@ -320,9 +316,9 @@ export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
           {step === 2 && (
             <div className="space-y-5">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2 flex items-center">
+                <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-2 flex items-center">
                   <Layers className="w-4 h-4 mr-1.5 text-blue-600" />
-                  Select Your Core Trading Philosophy
+                  Pick Your Investing Style
                 </label>
                 <div className="grid grid-cols-1 gap-2.5">
                   {PHILOSOPHIES.map((phil) => {
@@ -335,16 +331,16 @@ export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
                         className={`text-left p-3.5 rounded-xl border transition-all flex items-start justify-between ${
                           selected
                             ? 'bg-blue-50/80 border-blue-600 ring-1 ring-blue-600'
-                            : 'bg-white border-slate-200 hover:bg-slate-50'
+                            : 'bg-white border-stone-200 hover:bg-stone-50'
                         }`}
                       >
                         <div>
-                          <div className="text-sm font-bold text-slate-900">{phil.title}</div>
-                          <div className="text-xs text-slate-600 mt-0.5">{phil.desc}</div>
+                          <div className="text-sm font-bold text-stone-900">{phil.title}</div>
+                          <div className="text-xs text-stone-600 mt-0.5">{phil.desc}</div>
                         </div>
                         <div
                           className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-0.5 ${
-                            selected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300'
+                            selected ? 'bg-blue-600 border-blue-600 text-white' : 'border-stone-300'
                           }`}
                         >
                           {selected && <CheckCircle2 className="w-3.5 h-3.5" />}
@@ -356,8 +352,8 @@ export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-                  Active Execution Markets &amp; Venues (Select Multiple)
+                <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-2">
+                  Markets to Include (Select one or more)
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {ALL_ASSET_CLASSES.map((asset) => {
@@ -367,10 +363,10 @@ export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
                         key={asset}
                         type="button"
                         onClick={() => toggleAssetClass(asset)}
-                        className={`px-3.5 py-2 rounded-lg text-xs font-bold border transition-all ${
+                        className={`px-3.5 py-2 rounded-lg text-xs font-semibold border transition-all ${
                           active
-                            ? 'bg-slate-900 text-white border-slate-900'
-                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                            ? 'bg-stone-900 text-white border-stone-900'
+                            : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-100'
                         }`}
                       >
                         {active ? '✓ ' : '+ '}
@@ -386,9 +382,9 @@ export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
           {step === 3 && (
             <div className="space-y-5">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2 flex items-center">
+                <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-2 flex items-center">
                   <Clock className="w-4 h-4 mr-1.5 text-blue-600" />
-                  Holding Horizon &amp; Execution Cadence
+                  How long do you plan to hold positions?
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                   {HORIZONS.map((h) => {
@@ -406,12 +402,12 @@ export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
                         }
                         className={`p-3 rounded-xl border text-left transition-all ${
                           active
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                            : 'bg-white text-slate-800 border-slate-200 hover:bg-slate-50'
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-stone-800 border-stone-200 hover:bg-stone-50'
                         }`}
                       >
                         <div className="text-xs font-bold">{h.label}</div>
-                        <div className={`text-[10px] mt-1 ${active ? 'text-blue-100' : 'text-slate-500'}`}>
+                        <div className={`text-[10px] mt-1 ${active ? 'text-blue-100' : 'text-stone-500'}`}>
                           {h.sub}
                         </div>
                       </button>
@@ -422,9 +418,9 @@ export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2 flex items-center">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-2 flex items-center">
                     <Target className="w-4 h-4 mr-1.5 text-emerald-600" />
-                    Return Goal Preset
+                    Illustrative Return Goal
                   </label>
                   <div className="space-y-2">
                     {GOAL_TARGETS.map((g) => {
@@ -440,10 +436,10 @@ export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
                               targetReturnPct: g.pct,
                             })
                           }
-                          className={`w-full px-3.5 py-2.5 rounded-xl border text-left text-xs font-bold flex items-center justify-between ${
+                          className={`w-full px-3.5 py-2.5 rounded-xl border text-left text-xs font-semibold flex items-center justify-between ${
                             active
                               ? 'bg-emerald-50 border-emerald-600 text-emerald-950'
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                              : 'bg-white border-stone-200 text-stone-700 hover:bg-stone-50'
                           }`}
                         >
                           <span>{g.label}</span>
@@ -456,54 +452,51 @@ export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
 
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                      Custom Target Return (%)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      value={config.targetReturnPct}
-                      onChange={(e) =>
-                        setConfig({ ...config, targetReturnPct: Number(e.target.value) || 10 })
-                      }
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-mono font-bold text-slate-900"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                      Starting / Allocated Capital (From $100 to Institutional DMA)
+                    <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                      Personal Budget ($100 to $50,000+)
                     </label>
                     <div className="flex flex-wrap gap-1.5 mb-2">
-                      {[100, 1000, 10000, 250000, 19800000].map((amt) => (
+                      {EVERYDAY_BUDGETS.map((amt) => (
                         <button
                           key={amt}
                           type="button"
                           onClick={() => setConfig({ ...config, capitalAllocated: amt })}
                           className={`px-2.5 py-1 rounded text-xs font-mono font-bold border ${
                             config.capitalAllocated === amt
-                              ? 'bg-slate-900 text-white border-slate-900'
-                              : 'bg-slate-100 text-slate-700 border-slate-200'
+                              ? 'bg-stone-900 text-white border-stone-900'
+                              : 'bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200'
                           }`}
                         >
                           ${amt.toLocaleString()}
                         </button>
                       ))}
                     </div>
+                    <input
+                      type="number"
+                      min={25}
+                      step={50}
+                      value={config.capitalAllocated}
+                      onChange={(e) =>
+                        setConfig({ ...config, capitalAllocated: Math.max(25, Number(e.target.value) || 100) })
+                      }
+                      className="w-full rounded-xl border border-stone-300 px-3 py-2 text-sm font-mono font-bold text-stone-900"
+                    />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                      Max Single-Leg Drawdown Stop (%)
+                    <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                      Max Risk per Trade (%)
                     </label>
                     <input
                       type="number"
-                      step="0.05"
+                      step="0.25"
+                      min="0.25"
+                      max="10"
                       value={config.maxDrawdownPct}
                       onChange={(e) =>
-                        setConfig({ ...config, maxDrawdownPct: Number(e.target.value) || 0.65 })
+                        setConfig({ ...config, maxDrawdownPct: Number(e.target.value) || 2 })
                       }
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-mono font-bold text-slate-900"
+                      className="w-full rounded-xl border border-stone-300 px-3 py-2 text-sm font-mono font-bold text-stone-900"
                     />
                   </div>
                 </div>
@@ -513,53 +506,53 @@ export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
 
           {step === 4 && (
             <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="p-4 rounded-xl bg-stone-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <div className="text-xs font-mono uppercase text-blue-400">
-                    One Must Act Foundation Calculus (0 → 1 → 2..99 → 100)
+                    Research Plan Ready
                   </div>
                   <div className="text-lg font-bold mt-0.5">
-                    Foundation Wholeness W = 1.00 Verified · Effective Output V(W, M) = 5.98x
+                    All 5 Planning Checks Complete
                   </div>
-                  <p className="text-xs text-slate-300 mt-1">
-                    All 5 mandatory foundation criteria are bound. Middle-Out DAG will execute Wave 1, Wave 2 (Promise.all parallel skills), and Wave 3 (11 POP Artifacts + 100 Trades) in ~11ms.
+                  <p className="text-xs text-stone-300 mt-1">
+                    Sentinel will refresh your live-priced market ideas and generate 11 downloadable Markdown research guides tailored to your ${config.capitalAllocated.toLocaleString()} budget.
                   </p>
                 </div>
                 <div className="text-right font-mono shrink-0">
-                  <div className="text-2xl font-extrabold text-emerald-400">W = 1.00</div>
-                  <div className="text-[11px] text-slate-400">Zero Multiplier Decay</div>
+                  <div className="text-2xl font-extrabold text-emerald-400">5/5</div>
+                  <div className="text-[11px] text-stone-400">Ready to run</div>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50">
-                  <div className="text-[11px] font-bold uppercase text-slate-400">c₁: Primary Catalyst</div>
-                  <div className="text-xs font-semibold text-slate-900 mt-1 line-clamp-2">
+                <div className="p-3.5 rounded-xl border border-stone-200 bg-stone-50">
+                  <div className="text-[11px] font-bold uppercase text-stone-400">1. Market Idea</div>
+                  <div className="text-xs font-semibold text-stone-900 mt-1 line-clamp-2">
                     {config.hypothesisPrompt}
                   </div>
                 </div>
-                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50">
-                  <div className="text-[11px] font-bold uppercase text-slate-400">
-                    c₂ &amp; c₃: Philosophy &amp; Markets
+                <div className="p-3.5 rounded-xl border border-stone-200 bg-stone-50">
+                  <div className="text-[11px] font-bold uppercase text-stone-400">
+                    2. Style &amp; Markets
                   </div>
-                  <div className="text-xs font-semibold text-slate-900 mt-1">
+                  <div className="text-xs font-semibold text-stone-900 mt-1">
                     {config.philosophy} · {config.assetClasses.join(', ')}
                   </div>
                 </div>
-                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50">
-                  <div className="text-[11px] font-bold uppercase text-slate-400">
-                    c₄: Horizon &amp; Profit Target
+                <div className="p-3.5 rounded-xl border border-stone-200 bg-stone-50">
+                  <div className="text-[11px] font-bold uppercase text-stone-400">
+                    3. Timeframe &amp; Goal
                   </div>
                   <div className="text-xs font-semibold text-emerald-700 font-mono mt-1">
-                    {config.holdingHorizon} · {config.goalTarget} (+{config.targetReturnPct}% Target)
+                    {config.holdingHorizon} · +{config.targetReturnPct}% illustrative target
                   </div>
                 </div>
-                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50">
-                  <div className="text-[11px] font-bold uppercase text-slate-400">
-                    c₅: Capital &amp; Risk Guardrail
+                <div className="p-3.5 rounded-xl border border-stone-200 bg-stone-50">
+                  <div className="text-[11px] font-bold uppercase text-stone-400">
+                    4. Personal Budget &amp; Stop-Loss
                   </div>
-                  <div className="text-xs font-semibold text-slate-900 font-mono mt-1">
-                    ${config.capitalAllocated.toLocaleString()} Capital · {config.maxDrawdownPct}% Max Leg Stop
+                  <div className="text-xs font-semibold text-stone-900 font-mono mt-1">
+                    ${config.capitalAllocated.toLocaleString()} budget · {config.maxDrawdownPct}% max stop
                   </div>
                 </div>
               </div>
@@ -568,20 +561,20 @@ export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="bg-slate-50 border-t border-slate-200 px-5 py-4 flex items-center justify-between">
+        <div className="bg-stone-50 border-t border-stone-200 px-5 py-4 flex items-center justify-between">
           <div>
             {step > 1 ? (
               <button
                 type="button"
                 onClick={() => setStep((step - 1) as any)}
-                className="inline-flex items-center px-3.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-700 hover:bg-slate-100"
+                className="inline-flex items-center px-3.5 py-2 rounded-lg border border-stone-300 bg-white text-xs font-semibold text-stone-700 hover:bg-stone-100"
               >
                 <ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
                 Back
               </button>
             ) : (
-              <span className="text-xs text-slate-500">
-                Step {step} of 4 · Guided ROSTR Intake
+              <span className="text-xs text-stone-500">
+                Step {step} of 4 · Personal Research Setup
               </span>
             )}
           </div>
@@ -591,7 +584,7 @@ export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
               <button
                 type="button"
                 onClick={() => setStep((step + 1) as any)}
-                className="inline-flex items-center px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800"
+                className="inline-flex items-center px-4 py-2 rounded-lg bg-stone-900 text-white text-xs font-semibold hover:bg-stone-800"
               >
                 Next Step
                 <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
@@ -601,12 +594,10 @@ export const HypothesisWizardModal: React.FC<HypothesisWizardModalProps> = ({
               type="button"
               disabled={isSubmitting}
               onClick={handleFinalSubmit}
-              className="inline-flex items-center px-5 py-2.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 shadow-sm disabled:opacity-50"
+              className="inline-flex items-center px-5 py-2.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50"
             >
               <Cpu className="w-4 h-4 mr-1.5" />
-              {isSubmitting
-                ? 'Compiling ROSTR DAG Waves...'
-                : 'Launch ROSTR Harness & Compile 11 POP Artifacts'}
+              {isSubmitting ? 'Building research plan…' : 'Build Research Plan & 11 Guides'}
             </button>
           </div>
         </div>

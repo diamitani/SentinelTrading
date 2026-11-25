@@ -8,7 +8,25 @@ import {
   DiagridVirtualActor,
   SandboxExecutionResult,
   ComposioIntegration,
+  LiveFeedsResponse,
 } from '../types';
+
+export const fetchLiveFeeds = async (
+  category?: string,
+  query?: string,
+  refresh = false
+): Promise<LiveFeedsResponse> => {
+  const params = new URLSearchParams();
+  if (category && category !== 'All') params.set('category', category);
+  if (query && query.trim()) params.set('q', query.trim());
+  if (refresh) params.set('refresh', '1');
+  const qs = params.toString();
+  const response = await fetch(`/api/feeds/live${qs ? `?${qs}` : ''}`);
+  if (!response.ok) {
+    throw new Error('Failed to load live financial feeds');
+  }
+  return response.json();
+};
 
 export const fetchMarketAnalysis = async (
   thesisPrompt?: string,
@@ -170,7 +188,7 @@ export const submitPalThesis = async (
 export const fetchPlaidStatus = async (): Promise<PlaidStatus> => {
   const response = await fetch('/api/plaid/status');
   if (!response.ok) {
-    throw new Error('Failed to retrieve Plaid institutional link status');
+    throw new Error('Failed to retrieve brokerage tracker status');
   }
   return response.json();
 };

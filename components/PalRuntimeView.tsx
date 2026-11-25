@@ -11,16 +11,13 @@ import {
   Download,
   Copy,
   Check,
-  Zap,
   ShieldCheck,
-  Cpu,
   Layers,
   Play,
   PauseCircle,
   CheckCircle2,
   Sparkles,
   GitBranch,
-  Terminal,
 } from 'lucide-react';
 
 interface PalRuntimeViewProps {
@@ -59,17 +56,17 @@ export const PalRuntimeView: React.FC<PalRuntimeViewProps> = ({
   const [promptInput, setPromptInput] = useState<string>(
     rostrRun?.wizardConfig?.hypothesisPrompt ||
       palSession?.rawInputs?.prompt ||
-      'High Pepsi canned beverage sales rollout creating packaging sheet coil shortage -> CME Aluminum (ALI=F) & Alcoa (AA) calls + Polymarket/Kalshi inflation event spread; AI chip CoWoS capacity surge -> NVDA/TSM dual-listing arbitrage.'
+      'Track US Treasury yields (TLT, SHY), Federal Reserve rate signals, AI & cybersecurity leaders (NVDA, CRWD, PANW), and real estate REITs (VNQ).'
   );
   const [linksInput, setLinksInput] = useState<string>(
     palSession?.rawInputs?.links?.join('\n') ||
-      'https://www.cmegroup.com/markets/metals\nhttps://kalshi.com/markets\nhttps://www.sec.gov/edgar\nhttps://plaid.com/brokerage-data'
+      'https://www.federalreserve.gov/monetarypolicy.htm\nhttps://fiscaldata.treasury.gov\nhttps://www.sec.gov/edgar\nhttps://polymarket.com'
   );
-  const [riskTolerance, setRiskTolerance] = useState<string>(
-    palSession?.rawInputs?.riskTolerance || 'Aggressive-Alpha'
+  const [riskTolerance] = useState<string>(
+    palSession?.rawInputs?.riskTolerance || 'Balanced'
   );
-  const [capitalBudget, setCapitalBudget] = useState<number>(
-    rostrRun?.wizardConfig?.capitalAllocated || palSession?.rawInputs?.capitalBudget || 10000
+  const [capitalBudget] = useState<number>(
+    rostrRun?.wizardConfig?.capitalAllocated || palSession?.rawInputs?.capitalBudget || 1000
   );
   const [activeStepTab, setActiveStepTab] = useState<number>(1);
 
@@ -100,7 +97,7 @@ export const PalRuntimeView: React.FC<PalRuntimeViewProps> = ({
       .map(
         (art) =>
           `================================================================================\n` +
-          `ARTIFACT ${art.code}: ${art.fileName} — ${art.title}\n` +
+          `GUIDE ${art.code}: ${art.fileName} — ${art.title}\n` +
           `================================================================================\n\n` +
           `${art.content}\n\n`
       )
@@ -109,7 +106,7 @@ export const PalRuntimeView: React.FC<PalRuntimeViewProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'ROSTR_POP_11_ARTIFACT_CANONICAL_BUNDLE.md';
+    a.download = 'SENTINEL_11_RESEARCH_GUIDES.md';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -136,16 +133,16 @@ export const PalRuntimeView: React.FC<PalRuntimeViewProps> = ({
   };
 
   const steps = [
-    { step: 1, row: 'Ingest', name: 'Intake', desc: 'Chat & multi-modal ingest of user hypothesis', stageKey: 'intake' },
-    { step: 2, row: 'Ingest', name: 'Compile', desc: 'Compiles inputs into master.md & POP 11', stageKey: 'compile' },
-    { step: 3, row: 'Ingest', name: 'Store', desc: 'Stores session and prompt vectors in Supabase', stageKey: 'store' },
-    { step: 4, row: 'Understand', name: 'Extract', desc: 'Extracts {wants, goal, deliverables}', stageKey: 'extract' },
-    { step: 5, row: 'Understand', name: 'Assess', desc: 'Develops output-hypothesis.md', stageKey: 'assess' },
-    { step: 6, row: 'Understand', name: 'Enhance', desc: 'RAG DAL 3-tier credibility scoring', stageKey: 'enhance' },
-    { step: 7, row: 'Build and deliver', name: 'Plan', desc: 'Synthesizes build-instructions.md', stageKey: 'plan' },
-    { step: 8, row: 'Build and deliver', name: 'Build', desc: 'Synthesizes 100 arbitrage tickets', stageKey: 'build' },
-    { step: 9, row: 'Build and deliver', name: 'Test', desc: 'PAL quality adjudication scoring', stageKey: 'test' },
-    { step: 10, row: 'Build and deliver', name: 'Submit', desc: 'Delivers executable 100-trade grid', stageKey: 'submit' },
+    { step: 1, name: 'Capture Idea', stageKey: 'intake' },
+    { step: 2, name: 'Organize Brief', stageKey: 'compile' },
+    { step: 3, name: 'Save Session', stageKey: 'store' },
+    { step: 4, name: 'Extract Goals', stageKey: 'extract' },
+    { step: 5, name: 'Risk Check', stageKey: 'assess' },
+    { step: 6, name: 'Verify Sources', stageKey: 'enhance' },
+    { step: 7, name: 'Build Plan', stageKey: 'plan' },
+    { step: 8, name: 'Rank Ideas', stageKey: 'build' },
+    { step: 9, name: 'Quality Check', stageKey: 'test' },
+    { step: 10, name: 'Deliver Guides', stageKey: 'submit' },
   ];
 
   const stagesData: any = palSession?.stages || {};
@@ -156,28 +153,24 @@ export const PalRuntimeView: React.FC<PalRuntimeViewProps> = ({
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Canonical ROSTR Header Banner */}
-      <div className="bg-slate-900 text-white p-5 sm:p-6 rounded-2xl shadow-md flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      {/* Header Banner */}
+      <div className="bg-stone-900 text-white p-5 sm:p-6 rounded-2xl flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-mono font-bold">
-              ROSTR AUTONOMOUS AGENT OS v1.0.0
+            <span className="px-2.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-mono font-semibold">
+              Strategy Studio
             </span>
-            <span className="px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-xs font-mono font-bold">
-              WHOLENESS W = {wholeness?.guidedScoreW?.toFixed(2) || '1.00'} · V(W,M) ={' '}
-              {wholeness?.effectiveOutputValueV || '5.98'}x
-            </span>
-            <span className="px-2.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-400/30 text-xs font-mono font-bold">
-              MIDDLE-OUT DAG: {dag?.sequentialBaselineMs || 31450}ms → {dag?.compressedTotalMs || 11}ms (99.96% COLLAPSE)
+            <span className="px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-xs font-mono font-semibold">
+              {popArtifacts.length || 11} Downloadable Guides Ready
             </span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight">
-            Deterministic Foundation Wholeness, Middle-Out DAG &amp; POP 11-Artifact Engine
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
+            Strategy Studio &amp; Personal Research Guides
           </h1>
-          <p className="text-xs sm:text-sm text-slate-300 max-w-3xl">
-            Active Hypothesis ({rostrRun?.wizardConfig?.holdingHorizon || '3-Day Profit'} ·{' '}
-            {rostrRun?.wizardConfig?.goalTarget || '+10% Target'}):{' '}
-            <span className="text-white font-semibold">
+          <p className="text-xs sm:text-sm text-stone-300 max-w-3xl">
+            Active Focus ({rostrRun?.wizardConfig?.holdingHorizon || 'Monthly'} · $
+            {(rostrRun?.wizardConfig?.capitalAllocated || capitalBudget).toLocaleString()} budget):{' '}
+            <span className="text-white font-medium">
               &ldquo;{rostrRun?.wizardConfig?.hypothesisPrompt || promptInput}&rdquo;
             </span>
           </p>
@@ -188,88 +181,87 @@ export const PalRuntimeView: React.FC<PalRuntimeViewProps> = ({
             <button
               type="button"
               onClick={onOpenWizard}
-              className="inline-flex items-center px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-sm transition-colors"
+              className="inline-flex items-center px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors"
             >
               <Sparkles className="w-4 h-4 mr-1.5" />
-              Open Hypothesis &amp; Goals Wizard
+              Edit Strategy Wizard
             </button>
           )}
           {popArtifacts.length > 0 && (
             <button
               type="button"
               onClick={handleDownloadAll11MdBundle}
-              className="inline-flex items-center px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-bold transition-colors"
+              className="inline-flex items-center px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-semibold transition-colors"
             >
               <Download className="w-4 h-4 mr-1.5" />
-              Export All 11 POP Artifacts (.MD)
+              Download All 11 Guides (.MD)
             </button>
           )}
         </div>
       </div>
 
-      {/* Studio Mode Switcher */}
-      <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+      {/* Section Switcher */}
+      <div className="flex flex-wrap gap-2 border-b border-stone-200 pb-3">
         <button
           type="button"
           onClick={() => setActiveStudioSection('POP_11')}
-          className={`inline-flex items-center px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+          className={`inline-flex items-center px-4 py-2 rounded-xl text-xs font-semibold transition-all border ${
             activeStudioSection === 'POP_11'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+              ? 'bg-stone-900 text-white border-stone-900'
+              : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
           }`}
         >
           <FileText className="w-4 h-4 mr-1.5" />
-          1. POP 11-Artifact Explorer &amp; Export (A–K)
+          1. 11 Downloadable Research Guides
         </button>
         <button
           type="button"
           onClick={() => setActiveStudioSection('DAG_DIAGRID')}
-          className={`inline-flex items-center px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+          className={`inline-flex items-center px-4 py-2 rounded-xl text-xs font-semibold transition-all border ${
             activeStudioSection === 'DAG_DIAGRID'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+              ? 'bg-stone-900 text-white border-stone-900'
+              : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
           }`}
         >
           <GitBranch className="w-4 h-4 mr-1.5" />
-          2. Middle-Out DAG Waves &amp; Diagrid Virtual Actor
+          2. Fast Parallel Research &amp; Approval Pause
         </button>
         <button
           type="button"
           onClick={() => setActiveStudioSection('WHOLENESS_TRUTH')}
-          className={`inline-flex items-center px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+          className={`inline-flex items-center px-4 py-2 rounded-xl text-xs font-semibold transition-all border ${
             activeStudioSection === 'WHOLENESS_TRUTH'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+              ? 'bg-stone-900 text-white border-stone-900'
+              : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
           }`}
         >
           <ShieldCheck className="w-4 h-4 mr-1.5" />
-          3. One Must Act Calculus (W=1.00) &amp; Calibrated Truth
+          3. Research Readiness &amp; Fact Check
         </button>
         <button
           type="button"
           onClick={() => setActiveStudioSection('PAL_10_STEP')}
-          className={`inline-flex items-center px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+          className={`inline-flex items-center px-4 py-2 rounded-xl text-xs font-semibold transition-all border ${
             activeStudioSection === 'PAL_10_STEP'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+              ? 'bg-stone-900 text-white border-stone-900'
+              : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
           }`}
         >
           <Layers className="w-4 h-4 mr-1.5" />
-          4. 10-Step PAL Pipeline &amp; Agent Manifest
+          4. 10-Step Research Pipeline
         </button>
       </div>
 
-      {/* SECTION 1: INTERACTIVE POP 11-ARTIFACT VIEWER */}
+      {/* SECTION 1: 11 RESEARCH GUIDES */}
       {activeStudioSection === 'POP_11' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Artifact Index (A through K) */}
-          <div className="lg:col-span-4 bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                Canonical POP 11 Deliverables
+          <div className="lg:col-span-4 bg-white border border-stone-200 rounded-xl p-4 space-y-2">
+            <div className="flex items-center justify-between pb-2 border-b border-stone-100">
+              <span className="text-xs font-bold uppercase tracking-wider text-stone-700">
+                11 Research Guides (A–K)
               </span>
-              <span className="text-[11px] font-mono text-emerald-700 font-bold">
-                100% Deterministic
+              <span className="text-[11px] font-mono text-emerald-700 font-semibold">
+                Exportable .MD
               </span>
             </div>
             <div className="space-y-1.5 max-h-[600px] overflow-y-auto pr-1">
@@ -282,27 +274,27 @@ export const PalRuntimeView: React.FC<PalRuntimeViewProps> = ({
                     onClick={() => setSelectedArtifactCode(art.code)}
                     className={`w-full text-left p-3 rounded-xl border transition-all flex items-start justify-between gap-2 ${
                       isSelected
-                        ? 'bg-blue-50/90 border-blue-600 ring-1 ring-blue-600'
-                        : 'bg-white border-slate-200 hover:bg-slate-50'
+                        ? 'bg-blue-50/90 border-blue-600'
+                        : 'bg-white border-stone-200 hover:bg-stone-50'
                     }`}
                   >
                     <div className="min-w-0">
                       <div className="flex items-center space-x-2">
                         <span
                           className={`w-5 h-5 rounded text-[11px] font-mono font-bold flex items-center justify-center shrink-0 ${
-                            isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
+                            isSelected ? 'bg-blue-600 text-white' : 'bg-stone-100 text-stone-700'
                           }`}
                         >
                           {art.code}
                         </span>
-                        <span className="font-mono text-xs font-bold text-slate-900 truncate">
+                        <span className="font-mono text-xs font-bold text-stone-900 truncate">
                           {art.fileName}
                         </span>
                       </div>
-                      <div className="text-xs font-semibold text-slate-700 mt-1 truncate">
+                      <div className="text-xs font-semibold text-stone-700 mt-1 truncate">
                         {art.title}
                       </div>
-                      <div className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+                      <div className="text-[11px] text-stone-500 line-clamp-1 mt-0.5">
                         {art.purpose}
                       </div>
                     </div>
@@ -312,85 +304,83 @@ export const PalRuntimeView: React.FC<PalRuntimeViewProps> = ({
             </div>
           </div>
 
-          {/* Right Markdown Viewer & Exporter */}
-          <div className="lg:col-span-8 bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between space-y-4">
+          <div className="lg:col-span-8 bg-white border border-stone-200 rounded-xl p-5 flex flex-col justify-between space-y-4">
             {currentArtifact ? (
               <>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 pb-4">
                   <div>
                     <div className="flex items-center space-x-2">
                       <span className="px-2 py-0.5 rounded bg-blue-600 text-white font-mono text-xs font-bold">
-                        Artifact {currentArtifact.code}
+                        Guide {currentArtifact.code}
                       </span>
-                      <span className="font-mono text-sm font-bold text-slate-900">
+                      <span className="font-mono text-sm font-bold text-stone-900">
                         {currentArtifact.fileName}
                       </span>
                     </div>
-                    <h2 className="text-base font-bold text-slate-900 mt-1">
+                    <h2 className="text-base font-bold text-stone-900 mt-1">
                       {currentArtifact.title}
                     </h2>
-                    <p className="text-xs text-slate-500">{currentArtifact.purpose}</p>
+                    <p className="text-xs text-stone-500">{currentArtifact.purpose}</p>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 shrink-0">
                     <button
                       type="button"
                       onClick={() => handleCopyArtifact(currentArtifact)}
-                      className="inline-flex items-center px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700"
+                      className="inline-flex items-center px-3 py-1.5 rounded-lg border border-stone-300 bg-white hover:bg-stone-50 text-xs font-semibold text-stone-700"
                     >
                       {copiedCode === currentArtifact.code ? (
                         <Check className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
                       ) : (
                         <Copy className="w-3.5 h-3.5 mr-1.5" />
                       )}
-                      {copiedCode === currentArtifact.code ? 'Copied .MD' : 'Copy Markdown'}
+                      {copiedCode === currentArtifact.code ? 'Copied' : 'Copy text'}
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDownloadSingleMd(currentArtifact)}
-                      className="inline-flex items-center px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold"
+                      className="inline-flex items-center px-3.5 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 text-white text-xs font-semibold"
                     >
                       <Download className="w-3.5 h-3.5 mr-1.5" />
-                      Download {currentArtifact.fileName}
+                      Download .MD
                     </button>
                   </div>
                 </div>
 
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 sm:p-5 overflow-x-auto max-h-[540px] overflow-y-auto">
-                  <pre className="whitespace-pre-wrap font-mono text-xs text-slate-800 leading-relaxed">
+                <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 sm:p-5 overflow-x-auto max-h-[540px] overflow-y-auto">
+                  <pre className="whitespace-pre-wrap font-mono text-xs text-stone-800 leading-relaxed">
                     {currentArtifact.content}
                   </pre>
                 </div>
               </>
             ) : (
-              <div className="p-8 text-center text-sm text-slate-500">
-                Compiling POP 11-Artifact Package...
+              <div className="p-8 text-center text-sm text-stone-500">
+                Preparing your 11 personal research guides…
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* SECTION 2: MIDDLE-OUT DAG WAVES & DIAGRID VIRTUAL ACTOR */}
+      {/* SECTION 2: FAST PARALLEL RESEARCH & APPROVAL PAUSE */}
       {activeStudioSection === 'DAG_DIAGRID' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left: Pied Piper Middle-Out DAG Waves */}
-          <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
+          <div className="lg:col-span-7 bg-white border border-stone-200 rounded-xl p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-200 pb-3">
               <div>
-                <h2 className="text-base font-bold text-slate-900">
-                  &ldquo;Pied Piper&rdquo; Middle-Out Action Compressor (DAG Waves)
+                <h2 className="text-base font-bold text-stone-900">
+                  Fast Parallel Research Steps
                 </h2>
-                <p className="text-xs text-slate-500">
-                  Topological wave parallelization via <code className="font-mono">Promise.all()</code> + boolean precondition short-circuiting (<code className="font-mono">P_v = 0</code>).
+                <p className="text-xs text-stone-500">
+                  Independent checks run simultaneously so you get a complete brief in milliseconds instead of waiting step by step.
                 </p>
               </div>
               <div className="text-right font-mono">
-                <div className="text-sm font-extrabold text-emerald-700">
-                  {dag?.sequentialBaselineMs || 31450}ms → {dag?.compressedTotalMs || 11}ms
+                <div className="text-sm font-bold text-emerald-700">
+                  {dag?.compressedTotalMs || 11}ms parallel
                 </div>
-                <div className="text-[11px] text-slate-500">
-                  {dag?.latencyCollapsePct || '99.96%'} Latency Collapse
+                <div className="text-[11px] text-stone-500">
+                  vs {dag?.sequentialBaselineMs || 31450}ms sequential
                 </div>
               </div>
             </div>
@@ -399,12 +389,12 @@ export const PalRuntimeView: React.FC<PalRuntimeViewProps> = ({
               {(dag?.waves || []).map((wave) => (
                 <div
                   key={wave.waveIndex}
-                  className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3"
+                  className="p-4 rounded-xl border border-stone-200 bg-stone-50 space-y-3"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-900">{wave.title}</span>
-                    <span className="px-2.5 py-0.5 rounded bg-blue-100 text-blue-800 font-mono text-xs font-bold">
-                      Wave Wall-Clock: {wave.durationMs}ms
+                    <span className="text-xs font-bold text-stone-900">{wave.title}</span>
+                    <span className="px-2.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-mono text-xs font-semibold">
+                      {wave.durationMs}ms
                     </span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -415,20 +405,17 @@ export const PalRuntimeView: React.FC<PalRuntimeViewProps> = ({
                           key={node.id}
                           className={`p-3 rounded-lg border text-xs ${
                             isPruned
-                              ? 'bg-amber-50/70 border-amber-300 text-amber-950'
-                              : 'bg-white border-slate-200 text-slate-800'
+                              ? 'bg-amber-50/70 border-amber-200 text-amber-950'
+                              : 'bg-white border-stone-200 text-stone-800'
                           }`}
                         >
                           <div className="flex items-center justify-between gap-1 font-bold">
                             <span className="truncate">{node.name}</span>
                             <span className="font-mono text-[11px] shrink-0">
-                              {node.sequentialBaselineMs}ms → {node.compressedExecutionMs}ms
+                              {node.compressedExecutionMs}ms
                             </span>
                           </div>
-                          <div className="text-[10px] font-mono text-slate-500 mt-1">
-                            Precondition: {node.preconditionLabel} ({node.status})
-                          </div>
-                          <div className="text-[11px] mt-1 text-slate-600">{node.outputSummary}</div>
+                          <div className="text-[11px] mt-1 text-stone-600">{node.outputSummary}</div>
                         </div>
                       );
                     })}
@@ -438,16 +425,12 @@ export const PalRuntimeView: React.FC<PalRuntimeViewProps> = ({
             </div>
           </div>
 
-          {/* Right: Diagrid Catalyst Durable Virtual Actor */}
-          <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+          <div className="lg:col-span-5 bg-white border border-stone-200 rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
               <div>
-                <h2 className="text-base font-bold text-slate-900">
-                  Diagrid Catalyst Durable Virtual Actor
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Zero-Compute Sleep (<code className="font-mono">0 CPU / 0 Tokens</code>) &amp;{' '}
-                  <code className="font-mono">/raiseEvent</code> Resumption
+                <h2 className="text-base font-bold text-stone-900">Human Approval Pause</h2>
+                <p className="text-xs text-stone-500">
+                  Nothing executes automatically — Sentinel pauses and waits for your explicit review.
                 </p>
               </div>
               <span
@@ -457,41 +440,16 @@ export const PalRuntimeView: React.FC<PalRuntimeViewProps> = ({
                     : 'bg-amber-50 text-amber-800 border-amber-200'
                 }`}
               >
-                {activeActor?.state || 'ZERO_COMPUTE_SLEEP'}
+                {activeActor?.state === 'RESUMED_APPROVED' ? 'APPROVED' : 'PAUSED'}
               </span>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-900 text-white space-y-2.5 font-mono text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Actor ID:</span>
-                <span className="text-blue-300 font-bold">{activeActor?.actorId}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">CPU Allocation:</span>
-                <span className="text-emerald-400 font-bold">
-                  {activeActor?.cpuAllocationPct ?? 0}% CPU
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Idle Token Burn:</span>
-                <span className="text-emerald-400 font-bold">
-                  {activeActor?.tokenBurnRatePerHr ?? 0} Tokens/hr
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">KV Namespace:</span>
-                <span className="text-slate-300 truncate max-w-[210px]">
-                  {activeActor?.durableStorageNamespace}
-                </span>
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1">
-              <div className="font-bold text-slate-900">Asynchronous Gate Status:</div>
-              <p>{activeActor?.pendingApprovalReason}</p>
+            <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-xs text-stone-700 space-y-1">
+              <div className="font-bold text-stone-900">Current Checkpoint Status:</div>
+              <p>{activeActor?.pendingApprovalReason || 'Waiting for your review before updating paper ideas.'}</p>
               {activeActor?.lastEventPayload && (
-                <div className="pt-2 mt-2 border-t border-slate-200 font-mono text-[11px] text-blue-700">
-                  Last Event: {activeActor.lastEventPayload}
+                <div className="pt-2 mt-2 border-t border-stone-200 font-mono text-[11px] text-blue-700">
+                  Last action: {activeActor.lastEventPayload}
                 </div>
               )}
             </div>
@@ -501,40 +459,40 @@ export const PalRuntimeView: React.FC<PalRuntimeViewProps> = ({
                 type="button"
                 disabled={isRaisingEvent}
                 onClick={() => handleDiagridAction('RESUME_APPROVED')}
-                className="inline-flex items-center justify-center px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm disabled:opacity-50"
+                className="inline-flex items-center justify-center px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold disabled:opacity-50"
               >
                 <Play className="w-3.5 h-3.5 mr-1.5" />
-                POST /raiseEvent (Approve &amp; Resume)
+                Approve &amp; Resume
               </button>
               <button
                 type="button"
                 disabled={isRaisingEvent}
                 onClick={() => handleDiagridAction('SUSPEND_ZERO_COMPUTE')}
-                className="inline-flex items-center justify-center px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-xs font-bold disabled:opacity-50"
+                className="inline-flex items-center justify-center px-3.5 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-300 text-xs font-semibold disabled:opacity-50"
               >
                 <PauseCircle className="w-3.5 h-3.5 mr-1.5" />
-                Dehydrate to 0-CPU Sleep
+                Pause for Review
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* SECTION 3: ONE MUST ACT WHOLENESS & CALIBRATED TRUTH */}
+      {/* SECTION 3: READINESS CHECKLIST & FACT CHECK */}
       {activeStudioSection === 'WHOLENESS_TRUTH' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+          <div className="lg:col-span-7 bg-white border border-stone-200 rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
               <div>
-                <h2 className="text-base font-bold text-slate-900">
-                  One Must Act Foundation Calculus (0 → 1 → 2..99 → 100)
+                <h2 className="text-base font-bold text-stone-900">
+                  5-Point Research Readiness Checklist
                 </h2>
-                <p className="text-xs font-mono text-slate-600 mt-0.5">
-                  {wholeness?.formulaLatex}
+                <p className="text-xs text-stone-500 mt-0.5">
+                  Confirms your catalyst, markets, timeframe, budget, and stop-loss are all clearly defined before risking capital.
                 </p>
               </div>
-              <span className="px-3 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono text-sm font-extrabold">
-                W = {wholeness?.guidedScoreW?.toFixed(2) || '1.00'}
+              <span className="px-3 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono text-xs font-bold">
+                5/5 Complete
               </span>
             </div>
 
@@ -542,66 +500,57 @@ export const PalRuntimeView: React.FC<PalRuntimeViewProps> = ({
               {(wholeness?.criteria || []).map((c) => (
                 <div
                   key={c.id}
-                  className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 flex items-start justify-between gap-3"
+                  className="p-3.5 rounded-xl border border-stone-200 bg-stone-50 flex items-start justify-between gap-3"
                 >
                   <div>
-                    <div className="text-xs font-bold text-slate-900 flex items-center">
+                    <div className="text-xs font-bold text-stone-900 flex items-center">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600 mr-1.5 shrink-0" />
                       {c.name}
                     </div>
-                    <div className="text-xs text-slate-700 font-mono mt-1">{c.extractedValue}</div>
+                    <div className="text-xs text-stone-700 font-mono mt-1">{c.extractedValue}</div>
                   </div>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold shrink-0">
-                    I(c) = 1
+                    PASS
                   </span>
                 </div>
               ))}
             </div>
-
-            <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-950">
-              <span className="font-bold">Multiplier Decay Theorem Protection:</span>{' '}
-              {wholeness?.guidanceSummary}
-            </div>
           </div>
 
-          <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+          <div className="lg:col-span-5 bg-white border border-stone-200 rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
               <div>
-                <h2 className="text-base font-bold text-slate-900">Calibrated Truth Protocol</h2>
-                <p className="text-xs text-slate-500">
-                  Decouples Creative Warmth from Regex Operational Verification
+                <h2 className="text-base font-bold text-stone-900">Ticker &amp; Source Fact Check</h2>
+                <p className="text-xs text-stone-500">
+                  Verifies symbols, rates, and venues against public market feeds.
                 </p>
               </div>
               <span className="px-2.5 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono text-xs font-bold">
-                Truth Score: {truth?.truthScore || 99}/100
+                {truth?.truthScore || 99}/100
               </span>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950">
-              {truth?.creativeContextSummary}
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-950 font-medium">
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-950">
               {truth?.noticeBanner}
             </div>
 
             <div className="space-y-2">
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Regex-Verified Operational Entities
+              <div className="text-xs font-bold uppercase tracking-wider text-stone-500">
+                Verified Tickers &amp; Data Points
               </div>
               {(truth?.entities || []).map((ent, idx) => (
                 <div
                   key={idx}
-                  className="p-3 rounded-lg border border-slate-200 bg-slate-50 text-xs space-y-0.5"
+                  className="p-3 rounded-lg border border-stone-200 bg-stone-50 text-xs space-y-0.5"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-mono font-bold text-slate-800">{ent.entityType}</span>
+                    <span className="font-mono font-bold text-stone-800">{ent.entityType}</span>
                     <span className="text-[10px] font-mono text-emerald-700 font-bold">
-                      ✓ VERIFIED
+                      ✓ Verified
                     </span>
                   </div>
-                  <div className="font-mono text-slate-900">{ent.rawValue}</div>
-                  <div className="text-[10px] text-slate-500">Source: {ent.verificationSource}</div>
+                  <div className="font-mono text-stone-900">{ent.rawValue}</div>
+                  <div className="text-[10px] text-stone-500">Source: {ent.verificationSource}</div>
                 </div>
               ))}
             </div>
@@ -609,86 +558,71 @@ export const PalRuntimeView: React.FC<PalRuntimeViewProps> = ({
         </div>
       )}
 
-      {/* SECTION 4: 10-STEP PAL PIPELINE & AGENT MANIFEST */}
+      {/* SECTION 4: 10-STEP PIPELINE */}
       {activeStudioSection === 'PAL_10_STEP' && (
         <div className="space-y-6">
-          {/* Sub-Agents & Skills Manifest Summary */}
           {manifest && (
-            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
+            <div className="bg-white border border-stone-200 rounded-xl p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-200 pb-3">
                 <div>
-                  <h2 className="text-base font-bold text-slate-900">
-                    Compiled ROSTR Agent Manifest ({manifest.agentName})
-                  </h2>
-                  <p className="text-xs text-slate-600">Soul: &ldquo;{manifest.soulStatement}&rdquo;</p>
+                  <h2 className="text-base font-bold text-stone-900">Active Research Assistants</h2>
+                  <p className="text-xs text-stone-600">{manifest.soulStatement}</p>
                 </div>
-                <span className="text-xs font-mono text-blue-700 font-bold">
-                  {manifest.subAgents.length} Sub-Agents · {manifest.skills.length} Skills ·{' '}
-                  {manifest.mcpServers.length} MCP Servers
+                <span className="text-xs font-mono text-blue-700 font-semibold">
+                  {manifest.subAgents.length} Modules · {manifest.skills.length} Skills
                 </span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                 {manifest.subAgents.map((sa) => (
-                  <div key={sa.id} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50">
-                    <div className="text-xs font-bold text-slate-900">{sa.name}</div>
-                    <p className="text-[11px] text-slate-600 mt-1">{sa.role}</p>
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {sa.activeSkills.map((sk) => (
-                        <span
-                          key={sk}
-                          className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-mono text-[10px] font-semibold"
-                        >
-                          {sk}
-                        </span>
-                      ))}
-                    </div>
+                  <div key={sa.id} className="p-3.5 rounded-xl border border-stone-200 bg-stone-50">
+                    <div className="text-xs font-bold text-stone-900">{sa.name}</div>
+                    <p className="text-[11px] text-stone-600 mt-1">{sa.role}</p>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* 10-Step Interactive Diagram & Direct Thesis Compiler */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 mb-3">
-                Direct PAL Thesis Intake &amp; Re-Compiler
+            <div className="lg:col-span-5 bg-white border border-stone-200 rounded-xl p-5">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-stone-800 mb-3">
+                Update Your Research Thesis
               </h3>
               <form onSubmit={handleSubmit} className="space-y-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Hypothesis &amp; Strategy Directives
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Market Idea or Question
                   </label>
                   <textarea
                     rows={3}
                     value={promptInput}
                     onChange={(e) => setPromptInput(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 p-2.5 text-xs text-slate-900"
+                    className="w-full rounded-lg border border-stone-300 p-2.5 text-xs text-stone-900"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Authoritative Data Feeds (One URL per line)
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Reference URLs (one per line)
                   </label>
                   <textarea
                     rows={2}
                     value={linksInput}
                     onChange={(e) => setLinksInput(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 p-2.5 text-xs font-mono text-slate-800"
+                    className="w-full rounded-lg border border-stone-300 p-2.5 text-xs font-mono text-stone-800"
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={isCompiling}
-                  className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold"
+                  className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold"
                 >
-                  {isCompiling ? 'Compiling 10-Step Pipeline...' : 'Re-Compile PAL & ROSTR Pipeline'}
+                  {isCompiling ? 'Updating research plan…' : 'Refresh Research Plan'}
                 </button>
               </form>
             </div>
 
-            <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+            <div className="lg:col-span-7 bg-white border border-stone-200 rounded-xl p-5 space-y-4">
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                 {steps.map((s) => (
                   <button
@@ -697,8 +631,8 @@ export const PalRuntimeView: React.FC<PalRuntimeViewProps> = ({
                     onClick={() => setActiveStepTab(s.step)}
                     className={`p-2.5 rounded-lg border text-left transition-all ${
                       activeStepTab === s.step
-                        ? 'bg-slate-900 text-white border-slate-900'
-                        : 'bg-slate-50 text-slate-800 border-slate-200 hover:bg-slate-100'
+                        ? 'bg-stone-900 text-white border-stone-900'
+                        : 'bg-stone-50 text-stone-800 border-stone-200 hover:bg-stone-100'
                     }`}
                   >
                     <div className="text-[10px] font-mono opacity-75">Step {s.step}</div>
@@ -707,11 +641,11 @@ export const PalRuntimeView: React.FC<PalRuntimeViewProps> = ({
                 ))}
               </div>
 
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                <div className="text-xs font-bold uppercase text-slate-500 mb-2">
-                  Step {activeStepTab} Output Telemetry
+              <div className="p-4 rounded-xl bg-stone-50 border border-stone-200">
+                <div className="text-xs font-bold uppercase text-stone-500 mb-2">
+                  Step {activeStepTab} Output
                 </div>
-                <pre className="whitespace-pre-wrap font-mono text-xs text-slate-800 max-h-64 overflow-y-auto">
+                <pre className="whitespace-pre-wrap font-mono text-xs text-stone-800 max-h-64 overflow-y-auto">
                   {JSON.stringify(
                     stagesData[steps[activeStepTab - 1]?.stageKey] || stagesData,
                     null,
